@@ -1,0 +1,15 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/smt-d
+smt-d.so
+smt-d.dylib
+smt-d.dll
+smt-d.a
+smt-d.lib
+smt-d-test-*
+*.exe
+*.o
+*.obj
+*.lst
