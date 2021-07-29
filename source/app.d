@@ -44,6 +44,7 @@ void main() {
 
 alias Pair(T) = Tuple!(T, "fst", T, "snd");
 
+/// SMT Solver
 class SMTSolver {
 	string logic;
 	string[string] attributes;
@@ -53,11 +54,11 @@ class SMTSolver {
 	Pair!(Statement)[] eqConstraints;
 	Pair!(Statement)[] neqConstraints;
 
-
 	this() {
 		initialize();
 	}
 
+	/// ソルバーを初期化します。
 	void initialize() {
 		const string[] keywords = ["declare-sort", "declare-fun", "assert", "=", "not", "set-info", "set-logic", "check-sat", "exit"];
 		foreach(keyword; keywords) {
@@ -77,6 +78,18 @@ class SMTSolver {
 				auto statements = tree.children.map!(child => parseTree(child)).array;
 				if(statements.length == 0) return new EmptyStatement;
 				string head = tree.children.front.matches.front;
+				if(head == "=") {
+					return new EqualStatement(statements[1], statements[2]);
+				}
+				if(head == "and") {
+					return new AndStatement(statements[1], statements[2]);
+				}
+				if(head == "or") {
+					return new OrStatement(statements[1], statements[2]);
+				}
+				if(head == "not") {
+					return new NotStatement(statements[1]);
+				}
 				if(head in functions) {
 					return new FunctionStatement(functions[head], statements[1..$]);
 				} else {
@@ -144,8 +157,8 @@ class SMTSolver {
 						return declareFunction(funcName, [], outType);
 					}
 					if(auto lstmt = cast(ListStatement)fstmt.arguments[1]) {
-						Sort[] sorts = lstmt.elements.map!(s => (cast(SortStatement)s).sort).array;
-						return declareFunction(funcName, sorts, outType);
+						Sort[] inTypes = lstmt.elements.map!(s => (cast(SortStatement)s).sort).array;
+						return declareFunction(funcName, inTypes, outType);
 					}
 					throw new Exception("not a valid declare-fun");
 					// return declareFunction(fstmt.arguments[0].name, fstmt.arguments[1].arguments.map!(v => v.name).array, stmt.arguments[2].name);
@@ -236,7 +249,45 @@ class SMTSolver {
 	 */
 	bool addAssertion(Statement stmt) {
 		// TODO: implement
-		return false;
+		SATBridge bridge = new SATBridge(stmt);
+		string strFormula = bridge.parseAssertion(stmt);
+		strFormula.writeln;
+		stmt.writeln;
+
+		return true;
 	}
 }
 
+class SATBridge {
+	Statement stmt;
+	bool[Statement] truth;
+	/// SAT ソルバーに渡した変数の名前から元の Statement への対応を保持
+	Statement[string] SATVarToStmt;
+
+	this(Statement stmt) {
+		this.stmt = stmt;
+	}
+	
+	/**
+	 * 与えられた Statement を命題論理式を表した文字列に変換します。
+	 */
+	string parseAssertion(Statement stmt) {
+		if(auto eqStmt = cast(EqualStatement)stmt) {
+			// eq に入ったら、その中の木を hash として考えられるようにする
+			string varName = format("EQ%d", stmt.toHash());
+			SATVarToStmt[varName] = eqStmt;
+			return varName;
+		}
+		if(auto neqStmt = cast(NotStatement)stmt) {
+			// neq に入ったら、その中にあるであろう eq な Statement を期待する
+			return format("~(%s)", this.parseAssertion(neqStmt.child));
+		}
+		if(auto andStmt = cast(AndStatement)stmt) {
+			return format("(%s) /\\ (%s)", this.parseAssertion(andStmt.lhs), this.parseAssertion(andStmt.rhs));
+		}
+		if(auto orStmt = cast(OrStatement)stmt) {
+			return format("(%s) \\/ (%s)", this.parseAssertion(orStmt.lhs), this.parseAssertion(orStmt.rhs));
+		}
+		throw new Exception("Unknown statement while parsing assertion: %s (%s)".format(stmt, typeid(stmt)));
+	}
+}
