@@ -1,7 +1,11 @@
+module smtd.app;
+
+import smtd.statement;
+
 import std.stdio;
 import std.string;
 import std.range;
-import std.algorithm;
+import std.algorithm : map, each;
 import std.conv;
 import std.typecons : Tuple;
 import std.exception : basicExceptionCtors;
@@ -18,8 +22,8 @@ SExpression:
 	Attribute  <~ ':' [a-zA-Z_\-][a-zA-Z0-9_\-]*
 	List    < '(' SExpr* ')'
 
-	Keyword < "set-option" / "assert" / "not"
-	UnaryOp < '=' / '+' / '-'
+	Keyword < "set-option" / "not" / "and" / "or"
+	UnaryOp < '='
 `));
 
 void main() {
@@ -36,51 +40,6 @@ void main() {
 	solver.eqConstraints.each!writeln;
 	writeln("===== neqConstraints =====");
 	solver.neqConstraints.each!writeln;
-}
-
-class Function {
-	string name;
-	string[] inTypes;
-	string outType;
-
-	this(string name, string[] inTypes, string outType) {
-		this.name = name;
-		this.inTypes = inTypes;
-		this.outType = outType;
-	}
-
-	override string toString() {
-		return format("Function %s(%(%s, %) -> %s)", name, inTypes, outType);
-	}
-}
-
-class Sort {
-	string name;
-	ulong arity;
-
-	this(string name, ulong arity) {
-		this.name = name;
-		this.arity = arity;
-	}
-}
-
-// ソルバー内で扱われる形式
-class Statement {
-	Function applyingFunction;
-	Statement[] arguments;
-	string name;
-	long intValue;
-	float floatValue;
-
-	override string toString() {
-		if(!name.empty) return name;
-		if(applyingFunction) {
-			return format("%s (%(%s %))", applyingFunction.name, arguments);
-		}
-		if(intValue) return intValue.to!string;
-		if(floatValue) return floatValue.to!string;
-		return "<empty>";
-	}
 }
 
 alias Pair(T) = Tuple!(T, "fst", T, "snd");
@@ -115,42 +74,52 @@ class SMTSolver {
 			case "SExpression.SExpr", "SExpression":
 				return parseTree(tree.children[0]);
 			case "SExpression.List":
-				if(tree.children.length > 1) {
-					auto res = new Statement;
-					string functionKey = tree.children.front.matches.front;
-					if(functionKey in functions) {
-						res.applyingFunction = functions[functionKey];
-						res.arguments = tree.children[1..$].map!(child => parseTree(child)).array;
-						return res;
-					}
-					throw new Exception("No such function: %s".format(functionKey));
-				}
-				if(tree.children.length == 1) {
-					auto res = new Statement;
-					res.name = tree.children.front.matches.front;
-					return res;
+				auto statements = tree.children.map!(child => parseTree(child)).array;
+				if(statements.length == 0) return new EmptyStatement;
+				string head = tree.children.front.matches.front;
+				if(head in functions) {
+					return new FunctionStatement(functions[head], statements[1..$]);
+				} else {
+					return new ListStatement(statements);
 				}
 
-				// returns empty Statement
-				return new Statement;
+				// if(tree.children.length > 1) {
+				// 	auto res = new Statement;
+				// 	string functionKey = tree.children.front.matches.front;
+				// 	if(functionKey in functions) {
+				// 		res.applyingFunction = functions[functionKey];
+				// 		res.arguments = tree.children[1..$].map!(child => parseTree(child)).array;
+				// 		return res;
+				// 	}
+				// 	throw new Exception("No such function: %s".format(functionKey));
+				// }
+				// if(tree.children.length == 1) {
+				// 	auto res = new Statement;
+				// 	res.name = tree.children.front.matches.front;
+				// 	return res;
+				// }
+
+				// // returns empty Statement
+				// return new Statement;
 			case "SExpression.Symbol":
-				auto res = new Statement;
-				res.name = tree.matches.front;
-				return res;
+				string name = tree.matches.front;
+				if(name in sorts) {
+					return new SortStatement(sorts[name]);
+				}
+				if(name in functions) {
+					return new FunctionStatement(functions[name]);
+				}
+				return new SymbolStatement(name);
 			case "SExpression.Integer":
-				auto res = new Statement;
-				res.intValue = tree.matches.front.to!long;
-				return res;
+				return new IntegerStatement(tree.matches.front.to!long);
 			case "SExpression.Float":
-				auto res = new Statement;
-				res.floatValue = tree.matches.front.to!float;
-				return res;
+				return new FloatStatement(tree.matches.front.to!float);
 			case "SExpression.Attribute":
-				auto res = new Statement;
-				res.name = tree.matches.front[1..$];
-				return res;
+				return new AttributeStatement(tree.matches.front);
+			case "SExpression.UnaryOp", "SExpression.Keyword":
+				return new SymbolStatement(tree.matches.front);
 			default:
-				throw new Exception("Unknown node: %s".format(tree.name));
+				throw new Exception("Unknown node: %s (%s)".format(tree.name, tree.matches.front));
 		}
 	}
 
@@ -158,24 +127,44 @@ class SMTSolver {
 	 * 与えられた Statement をソルバー上で処理します。
 	 */
 	bool runStatement(Statement stmt) {
-		switch(stmt.applyingFunction.name) {
-			case "assert":
-				return addAssertion(stmt.arguments[0]);
-			case "declare-sort":
-				return declareSort(stmt.arguments[0].name, stmt.arguments[1].intValue);
-			case "declare-fun":
-				return declareFunction(stmt.arguments[0].name, stmt.arguments[1].arguments.map!(v => v.name).array, stmt.arguments[2].name);
-			case "set-logic":
-				return setLogic(stmt.arguments[0].name);
-			case "set-info":
-				return setInfo(stmt.arguments[0].name, stmt.arguments[1].name);
-			case "check-sat":
-				return checkSat();
-			case "exit":
-				return exitSolver();
-			default:
-				assert(0);
+		if(auto fstmt = cast(FunctionStatement)stmt) {
+			switch(fstmt.applyingFunction.name) {
+				case "assert":
+					return addAssertion(fstmt.arguments[0]);
+				case "declare-sort":
+					auto symbolStmt = cast(SymbolStatement)fstmt.arguments[0];
+					auto intStmt = cast(IntegerStatement)fstmt.arguments[1];
+					return declareSort(symbolStmt.name, intStmt.value);
+				case "declare-fun":
+					string funcName = (cast(SymbolStatement)fstmt.arguments[0]).name;
+					Sort outType = (cast(SortStatement)fstmt.arguments[2]).sort;
+
+					// declaring a constant
+					if(auto estmt = cast(EmptyStatement)fstmt.arguments[1]) {
+						return declareFunction(funcName, [], outType);
+					}
+					if(auto lstmt = cast(ListStatement)fstmt.arguments[1]) {
+						Sort[] sorts = lstmt.elements.map!(s => (cast(SortStatement)s).sort).array;
+						return declareFunction(funcName, sorts, outType);
+					}
+					throw new Exception("not a valid declare-fun");
+					// return declareFunction(fstmt.arguments[0].name, fstmt.arguments[1].arguments.map!(v => v.name).array, stmt.arguments[2].name);
+				case "set-logic":
+					string logicName = (cast(SymbolStatement)fstmt.arguments[0]).name;
+					return setLogic(logicName);
+				case "set-info":
+					string name = (cast(AttributeStatement)fstmt.arguments[0]).attribution;
+					string content = (cast(StringStatement)fstmt.arguments[1]).value;
+					return setInfo(name, content);
+				case "check-sat":
+					return checkSat();
+				case "exit":
+					return exitSolver();
+				default:
+					assert(0);
+			}
 		}
+		return false;
 	}
 
 	/**
@@ -197,21 +186,9 @@ class SMTSolver {
 	/**
 	 * 新しい関数を定義します。
 	 */
-	bool declareFunction(string name, string[] inTypes, string outType) {
+	bool declareFunction(string name, Sort[] inTypes, Sort outType) {
 		if(name in functions) {
 			throw new Exception("Function name duplicated; consider renaming it");
-		}
-
-		// Check whether all types in inTypes are actual types
-		foreach(type; inTypes) {
-			if(type !in sorts) {
-				throw new Exception("Unknown type: %s".format(type));
-			}
-		}
-
-		// Check whether outType is an actual type
-		if(outType !in sorts) {
-			throw new Exception("Unknown type: %s".format(outType));
 		}
 
 		auto f = new Function(name, inTypes, outType);
@@ -258,12 +235,7 @@ class SMTSolver {
 	 * 与えられた assertion に関する Statement を見てソルバーに制約を追加します。
 	 */
 	bool addAssertion(Statement stmt) {
-		if(stmt.applyingFunction.name == "=") {
-			eqConstraints ~= Pair!Statement(stmt.arguments[0], stmt.arguments[1]);
-		} else if(stmt.applyingFunction.name == "not" && stmt.arguments[0].applyingFunction.name == "=") {
-			stmt = stmt.arguments[0];
-			neqConstraints ~= Pair!Statement(stmt.arguments[0], stmt.arguments[1]);
-		} else throw new Exception("This statement is not yet supported for assertion: %s".format(stmt));
+		// TODO: implement
 		return false;
 	}
 }
