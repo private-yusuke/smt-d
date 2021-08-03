@@ -262,7 +262,23 @@ class BinaryOpExpression : Expression
 	}
 }
 
-class AndExpression : BinaryOpExpression
+/// 与えられた引数の位置が交換可能なアリティ2の演算子を表すデータ構造
+class CommutativeBinaryOpExpression : BinaryOpExpression
+{
+	this(Expression lhs, Expression rhs)
+	{
+		if (lhs.hashOf() < rhs.hashOf())
+		{
+			super(lhs, rhs);
+		}
+		else
+		{
+			super(rhs, lhs);
+		}
+	}
+}
+
+class AndExpression : CommutativeBinaryOpExpression
 {
 	this(Expression lhs, Expression rhs)
 	{
@@ -280,7 +296,7 @@ class AndExpression : BinaryOpExpression
 	}
 }
 
-class OrExpression : BinaryOpExpression
+class OrExpression : CommutativeBinaryOpExpression
 {
 	this(Expression lhs, Expression rhs)
 	{
@@ -298,7 +314,7 @@ class OrExpression : BinaryOpExpression
 	}
 }
 
-class EqualExpression : BinaryOpExpression
+class EqualExpression : CommutativeBinaryOpExpression
 {
 	this(Expression lhs, Expression rhs)
 	{
