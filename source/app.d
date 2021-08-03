@@ -284,11 +284,21 @@ class SMTSolver
 	 */
 	bool addAssertion(Statement stmt)
 	{
+		import satd;
+
 		// TODO: implement
 		SATBridge bridge = new SATBridge(stmt);
 		string strFormula = bridge.parseAssertion(stmt);
+
 		strFormula.writeln;
 		stmt.writeln;
+
+		auto solver = new CDCLSolver();
+		auto tseytin = tseytinTransform(strFormula);
+		solver.initialize(tseytin.parseResult);
+		auto res = solver.solve();
+		auto literals = res.peek!(Literal[]);
+		auto assignemnt = resultToOriginalVarsAssignment(tseytin, *literals);
 
 		return true;
 	}
@@ -321,7 +331,7 @@ class SATBridge
 		if (auto neqStmt = cast(NotStatement) stmt)
 		{
 			// neq に入ったら、その中にあるであろう eq な Statement を期待する
-			return format("~(%s)", this.parseAssertion(neqStmt.child));
+			return format("-(%s)", this.parseAssertion(neqStmt.child));
 		}
 		if (auto andStmt = cast(AndStatement) stmt)
 		{
