@@ -48,25 +48,25 @@ class Sort
 }
 
 // ソルバー内で扱われる形式
-class Statement
+class Expression
 {
 }
 
-class EmptyStatement : Statement
+class EmptyExpression : Expression
 {
 }
 
-class FunctionStatement : Statement
+class FunctionExpression : Expression
 {
 	Function applyingFunction;
-	Statement[] arguments;
+	Expression[] arguments;
 
 	this(Function applyingFunction)
 	{
 		this(applyingFunction, []);
 	}
 
-	this(Function applyingFunction, Statement[] arguments)
+	this(Function applyingFunction, Expression[] arguments)
 	{
 		this.applyingFunction = applyingFunction;
 		this.arguments = arguments;
@@ -91,7 +91,7 @@ class FunctionStatement : Statement
 	}
 }
 
-class SortStatement : Statement
+class SortExpression : Expression
 {
 	Sort sort;
 
@@ -101,11 +101,11 @@ class SortStatement : Statement
 	}
 }
 
-class ListStatement : Statement
+class ListExpression : Expression
 {
-	Statement[] elements;
+	Expression[] elements;
 
-	this(Statement[] elements)
+	this(Expression[] elements)
 	{
 		this.elements = elements;
 	}
@@ -128,7 +128,7 @@ class ListStatement : Statement
 	}
 }
 
-class SymbolStatement : Statement
+class SymbolExpression : Expression
 {
 	string name;
 
@@ -153,7 +153,7 @@ class SymbolStatement : Statement
 	}
 }
 
-class AttributeStatement : Statement
+class AttributeExpression : Expression
 {
 	string attribution;
 
@@ -168,7 +168,7 @@ class AttributeStatement : Statement
 	}
 }
 
-class IntegerStatement : Statement
+class IntegerExpression : Expression
 {
 	long value;
 
@@ -183,7 +183,7 @@ class IntegerStatement : Statement
 	}
 }
 
-class FloatStatement : Statement
+class FloatExpression : Expression
 {
 	float value;
 
@@ -198,7 +198,7 @@ class FloatStatement : Statement
 	}
 }
 
-class StringStatement : Statement
+class StringExpression : Expression
 {
 	string value;
 
@@ -213,11 +213,11 @@ class StringStatement : Statement
 	}
 }
 
-class UnaryOpStatement : Statement
+class UnaryOpExpression : Expression
 {
-	Statement child;
+	Expression child;
 
-	this(Statement child)
+	this(Expression child)
 	{
 		this.child = child;
 	}
@@ -228,9 +228,9 @@ class UnaryOpStatement : Statement
 	}
 }
 
-class NotStatement : UnaryOpStatement
+class NotExpression : UnaryOpExpression
 {
-	this(Statement child)
+	this(Expression child)
 	{
 		super(child);
 	}
@@ -246,11 +246,11 @@ class NotStatement : UnaryOpStatement
 	}
 }
 
-class BinaryOpStatement : Statement
+class BinaryOpExpression : Expression
 {
-	Statement lhs, rhs;
+	Expression lhs, rhs;
 
-	this(Statement lhs, Statement rhs)
+	this(Expression lhs, Expression rhs)
 	{
 		this.lhs = lhs;
 		this.rhs = rhs;
@@ -262,9 +262,9 @@ class BinaryOpStatement : Statement
 	}
 }
 
-class AndStatement : BinaryOpStatement
+class AndExpression : BinaryOpExpression
 {
-	this(Statement lhs, Statement rhs)
+	this(Expression lhs, Expression rhs)
 	{
 		super(lhs, rhs);
 	}
@@ -280,9 +280,9 @@ class AndStatement : BinaryOpStatement
 	}
 }
 
-class OrStatement : BinaryOpStatement
+class OrExpression : BinaryOpExpression
 {
-	this(Statement lhs, Statement rhs)
+	this(Expression lhs, Expression rhs)
 	{
 		super(lhs, rhs);
 	}
@@ -298,9 +298,9 @@ class OrStatement : BinaryOpStatement
 	}
 }
 
-class EqualStatement : BinaryOpStatement
+class EqualExpression : BinaryOpExpression
 {
-	this(Statement lhs, Statement rhs)
+	this(Expression lhs, Expression rhs)
 	{
 		super(lhs, rhs);
 	}

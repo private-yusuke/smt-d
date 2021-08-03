@@ -34,8 +34,8 @@ void main()
 	while (stdin.readln(buf))
 	{
 		auto parseTree = SExpression(buf.to!string);
-		auto stmt = solver.parseTree(parseTree);
-		solver.runStatement(stmt);
+		auto expr = solver.parseTree(parseTree);
+		solver.runExpression(expr);
 	}
 
 	writeln("===== eqConstraints =====");
@@ -54,8 +54,8 @@ class SMTSolver
 
 	Sort[string] sorts;
 	Function[string] functions;
-	Pair!(Statement)[] eqConstraints;
-	Pair!(Statement)[] neqConstraints;
+	Pair!(Expression)[] eqConstraints;
+	Pair!(Expression)[] neqConstraints;
 
 	this()
 	{
@@ -76,10 +76,10 @@ class SMTSolver
 	}
 
 	/**
-	 * 与えられた parse tree から Statement に変換します。
-	 * [WIP] このとき、その Statement 中の式での関数適用について、ソルバーの持つ関数や sort のそれに適しているものであるか判定し、正しくなければ例外が投げられます。
+	 * 与えられた parse tree から Expression に変換します。
+	 * [WIP] このとき、その Expression 中の式での関数適用について、ソルバーの持つ関数や sort のそれに適しているものであるか判定し、正しくなければ例外が投げられます。
 	 */
-	Statement parseTree(T)(T tree)
+	Expression parseTree(T)(T tree)
 	{
 		switch (tree.name)
 		{
@@ -88,35 +88,35 @@ class SMTSolver
 		case "SExpression.List":
 			auto statements = tree.children.map!(child => parseTree(child)).array;
 			if (statements.length == 0)
-				return new EmptyStatement;
+				return new EmptyExpression;
 			string head = tree.children.front.matches.front;
 			if (head == "=")
 			{
-				return new EqualStatement(statements[1], statements[2]);
+				return new EqualExpression(statements[1], statements[2]);
 			}
 			if (head == "and")
 			{
-				return new AndStatement(statements[1], statements[2]);
+				return new AndExpression(statements[1], statements[2]);
 			}
 			if (head == "or")
 			{
-				return new OrStatement(statements[1], statements[2]);
+				return new OrExpression(statements[1], statements[2]);
 			}
 			if (head == "not")
 			{
-				return new NotStatement(statements[1]);
+				return new NotExpression(statements[1]);
 			}
 			if (head in functions)
 			{
-				return new FunctionStatement(functions[head], statements[1 .. $]);
+				return new FunctionExpression(functions[head], statements[1 .. $]);
 			}
 			else
 			{
-				return new ListStatement(statements);
+				return new ListExpression(statements);
 			}
 
 			// if(tree.children.length > 1) {
-			// 	auto res = new Statement;
+			// 	auto res = new Expression;
 			// 	string functionKey = tree.children.front.matches.front;
 			// 	if(functionKey in functions) {
 			// 		res.applyingFunction = functions[functionKey];
@@ -126,75 +126,75 @@ class SMTSolver
 			// 	throw new Exception("No such function: %s".format(functionKey));
 			// }
 			// if(tree.children.length == 1) {
-			// 	auto res = new Statement;
+			// 	auto res = new Expression;
 			// 	res.name = tree.children.front.matches.front;
 			// 	return res;
 			// }
 
-			// // returns empty Statement
-			// return new Statement;
+			// // returns empty Expression
+			// return new Expression;
 		case "SExpression.Symbol":
 			string name = tree.matches.front;
 			if (name in sorts)
 			{
-				return new SortStatement(sorts[name]);
+				return new SortExpression(sorts[name]);
 			}
 			if (name in functions)
 			{
-				return new FunctionStatement(functions[name]);
+				return new FunctionExpression(functions[name]);
 			}
-			return new SymbolStatement(name);
+			return new SymbolExpression(name);
 		case "SExpression.Integer":
-			return new IntegerStatement(tree.matches.front.to!long);
+			return new IntegerExpression(tree.matches.front.to!long);
 		case "SExpression.Float":
-			return new FloatStatement(tree.matches.front.to!float);
+			return new FloatExpression(tree.matches.front.to!float);
 		case "SExpression.Attribute":
-			return new AttributeStatement(tree.matches.front);
+			return new AttributeExpression(tree.matches.front);
 		case "SExpression.UnaryOp",
 				"SExpression.Keyword":
-				return new SymbolStatement(tree.matches.front);
+				return new SymbolExpression(tree.matches.front);
 		default:
 			throw new Exception("Unknown node: %s (%s)".format(tree.name, tree.matches.front));
 		}
 	}
 
 	/**
-	 * 与えられた Statement をソルバー上で処理します。
+	 * 与えられた Expression をソルバー上で処理します。
 	 */
-	bool runStatement(Statement stmt)
+	bool runExpression(Expression expr)
 	{
-		if (auto fstmt = cast(FunctionStatement) stmt)
+		if (auto fexpr = cast(FunctionExpression) expr)
 		{
-			switch (fstmt.applyingFunction.name)
+			switch (fexpr.applyingFunction.name)
 			{
 			case "assert":
-				return addAssertion(fstmt.arguments[0]);
+				return addAssertion(fexpr.arguments[0]);
 			case "declare-sort":
-				auto symbolStmt = cast(SymbolStatement) fstmt.arguments[0];
-				auto intStmt = cast(IntegerStatement) fstmt.arguments[1];
-				return declareSort(symbolStmt.name, intStmt.value);
+				auto symbolExpr = cast(SymbolExpression) fexpr.arguments[0];
+				auto intExpr = cast(IntegerExpression) fexpr.arguments[1];
+				return declareSort(symbolExpr.name, intExpr.value);
 			case "declare-fun":
-				string funcName = (cast(SymbolStatement) fstmt.arguments[0]).name;
-				Sort outType = (cast(SortStatement) fstmt.arguments[2]).sort;
+				string funcName = (cast(SymbolExpression) fexpr.arguments[0]).name;
+				Sort outType = (cast(SortExpression) fexpr.arguments[2]).sort;
 
 				// declaring a constant
-				if (auto estmt = cast(EmptyStatement) fstmt.arguments[1])
+				if (auto eexpr = cast(EmptyExpression) fexpr.arguments[1])
 				{
 					return declareFunction(funcName, [], outType);
 				}
-				if (auto lstmt = cast(ListStatement) fstmt.arguments[1])
+				if (auto lexpr = cast(ListExpression) fexpr.arguments[1])
 				{
-					Sort[] inTypes = lstmt.elements.map!(s => (cast(SortStatement) s).sort).array;
+					Sort[] inTypes = lexpr.elements.map!(s => (cast(SortExpression) s).sort).array;
 					return declareFunction(funcName, inTypes, outType);
 				}
 				throw new Exception("not a valid declare-fun");
-				// return declareFunction(fstmt.arguments[0].name, fstmt.arguments[1].arguments.map!(v => v.name).array, stmt.arguments[2].name);
+				// return declareFunction(fexpr.arguments[0].name, fexpr.arguments[1].arguments.map!(v => v.name).array, expr.arguments[2].name);
 			case "set-logic":
-				string logicName = (cast(SymbolStatement) fstmt.arguments[0]).name;
+				string logicName = (cast(SymbolExpression) fexpr.arguments[0]).name;
 				return setLogic(logicName);
 			case "set-info":
-				string name = (cast(AttributeStatement) fstmt.arguments[0]).attribution;
-				string content = (cast(StringStatement) fstmt.arguments[1]).value;
+				string name = (cast(AttributeExpression) fexpr.arguments[0]).attribution;
+				string content = (cast(StringExpression) fexpr.arguments[1]).value;
 				return setInfo(name, content);
 			case "check-sat":
 				return checkSat();
@@ -280,18 +280,18 @@ class SMTSolver
 	}
 
 	/**
-	 * 与えられた assertion に関する Statement を見てソルバーに制約を追加します。
+	 * 与えられた assertion に関する Expression を見てソルバーに制約を追加します。
 	 */
-	bool addAssertion(Statement stmt)
+	bool addAssertion(Expression expr)
 	{
 		import satd;
 
 		// TODO: implement
-		SATBridge bridge = new SATBridge(stmt);
-		string strFormula = bridge.parseAssertion(stmt);
+		SATBridge bridge = new SATBridge(expr);
+		string strFormula = bridge.parseAssertion(expr);
 
 		strFormula.writeln;
-		stmt.writeln;
+		expr.writeln;
 
 		auto solver = new CDCLSolver();
 		auto tseytin = tseytinTransform(strFormula);
@@ -306,44 +306,44 @@ class SMTSolver
 
 class SATBridge
 {
-	Statement stmt;
-	bool[Statement] truth;
-	/// SAT ソルバーに渡した変数の名前から元の Statement への対応を保持
-	Statement[string] SATVarToStmt;
+	Expression expr;
+	bool[Expression] truth;
+	/// SAT ソルバーに渡した変数の名前から元の Expression への対応を保持
+	Expression[string] SATVarToExpr;
 
-	this(Statement stmt)
+	this(Expression expr)
 	{
-		this.stmt = stmt;
+		this.expr = expr;
 	}
 
 	/**
-	 * 与えられた Statement を命題論理式を表した文字列に変換します。
+	 * 与えられた Expression を命題論理式を表した文字列に変換します。
 	 */
-	string parseAssertion(Statement stmt)
+	string parseAssertion(Expression expr)
 	{
-		if (auto eqStmt = cast(EqualStatement) stmt)
+		if (auto eqExpr = cast(EqualExpression) expr)
 		{
 			// eq に入ったら、その中の木を hash として考えられるようにする
-			string varName = format("EQ%d", stmt.toHash());
-			SATVarToStmt[varName] = eqStmt;
+			string varName = format("EQ%d", expr.toHash());
+			SATVarToExpr[varName] = eqExpr;
 			return varName;
 		}
-		if (auto neqStmt = cast(NotStatement) stmt)
+		if (auto neqExpr = cast(NotExpression) expr)
 		{
-			// neq に入ったら、その中にあるであろう eq な Statement を期待する
-			return format("-(%s)", this.parseAssertion(neqStmt.child));
+			// neq に入ったら、その中にあるであろう eq な Expression を期待する
+			return format("-(%s)", this.parseAssertion(neqExpr.child));
 		}
-		if (auto andStmt = cast(AndStatement) stmt)
+		if (auto andExpr = cast(AndExpression) expr)
 		{
-			return format("(%s) /\\ (%s)", this.parseAssertion(andStmt.lhs),
-					this.parseAssertion(andStmt.rhs));
+			return format("(%s) /\\ (%s)", this.parseAssertion(andExpr.lhs),
+					this.parseAssertion(andExpr.rhs));
 		}
-		if (auto orStmt = cast(OrStatement) stmt)
+		if (auto orExpr = cast(OrExpression) expr)
 		{
-			return format("(%s) \\/ (%s)", this.parseAssertion(orStmt.lhs),
-					this.parseAssertion(orStmt.rhs));
+			return format("(%s) \\/ (%s)", this.parseAssertion(orExpr.lhs),
+					this.parseAssertion(orExpr.rhs));
 		}
-		throw new Exception("Unknown statement while parsing assertion: %s (%s)".format(stmt,
-				typeid(stmt)));
+		throw new Exception("Unknown statement while parsing assertion: %s (%s)".format(expr,
+				typeid(expr)));
 	}
 }
