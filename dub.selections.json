@@ -1,6 +1,7 @@
 {
 	"fileVersion": 1,
 	"versions": {
-		"pegged": "0.4.5"
+		"pegged": "0.4.5",
+		"sat-d": "1.0.0"
 	}
 }

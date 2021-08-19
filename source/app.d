@@ -1,15 +1,19 @@
 module smtd.app;
 
 import smtd.statement;
+import smtd.theory_solver;
 
 import std.stdio;
 import std.string;
 import std.range;
-import std.algorithm : map, each;
+import std.algorithm : map, each, filter;
 import std.conv;
 import std.typecons : Tuple;
 import std.exception : basicExceptionCtors;
 import pegged.grammar;
+import satd.solvers.cdcl;
+import satd.cnf : Literal;
+import satd.tseytin : tseytinTransform, resultToOriginalVarsAssignment;
 
 mixin(grammar(`
 SExpression:
@@ -37,11 +41,6 @@ void main()
 		auto expr = solver.parseTree(parseTree);
 		solver.runExpression(expr);
 	}
-
-	writeln("===== eqConstraints =====");
-	solver.eqConstraints.each!writeln;
-	writeln("===== neqConstraints =====");
-	solver.neqConstraints.each!writeln;
 }
 
 alias Pair(T) = Tuple!(T, "fst", T, "snd");
@@ -54,8 +53,10 @@ class SMTSolver
 
 	Sort[string] sorts;
 	Function[string] functions;
-	Pair!(Expression)[] eqConstraints;
-	Pair!(Expression)[] neqConstraints;
+	Expression[] eqConstraints;
+	Expression[] neqConstraints;
+	SATBridge satBridge;
+	TheorySolver tSolver;
 
 	this()
 	{
@@ -73,6 +74,8 @@ class SMTSolver
 		{
 			functions[keyword] = new Function(keyword, null, null);
 		}
+
+		this.satBridge = new SATBridge();
 	}
 
 	/**
@@ -246,10 +249,14 @@ class SMTSolver
 	 */
 	bool setLogic(string logic)
 	{
-		if (logic != "QF_UF")
+		switch (logic)
+		{
+		case "QF_UF":
+			this.tSolver = new QF_UF_Solver();
+			break;
+		default:
 			throw new Exception("Logic other than QF_UF is not yet supported: %s".format(logic));
-
-		this.logic = logic;
+		}
 		return true;
 	}
 
@@ -267,7 +274,51 @@ class SMTSolver
 	 */
 	bool checkSat()
 	{
-		throw new Exception("check-sat is not yet supported");
+		// 現在の制約を充足するような assignment が存在したら真になる
+		bool ok = false;
+		while (!ok)
+		{
+			auto assignment = satBridge.getAssignmentFromSATSolver();
+			// SAT ソルバが解いた結果、UNSAT だったら諦める
+			if (assignment == null)
+			{
+				writeln("UNSAT by SAT Solver");
+				break;
+			}
+
+			eqConstraints = assignment.byPair
+				.filter!(p => p.value)
+				.map!(p => p.key)
+				.array;
+			neqConstraints = assignment.byPair
+				.filter!(p => !p.value)
+				.map!(p => p.key)
+				.array;
+
+			writeln("===== eqConstraints =====");
+			this.eqConstraints.each!writeln;
+			writeln("===== neqConstraints =====");
+			this.neqConstraints.each!writeln;
+
+			tSolver.eqConstraints = cast(EqualExpression[]) eqConstraints;
+			tSolver.neqConstraints = cast(EqualExpression[]) neqConstraints;
+
+			auto res = tSolver.solve();
+
+			// 理論ソルバで SAT だったら終了
+			if (res.ok)
+			{
+				ok = true;
+				break;
+			}
+
+			// 理論ソルバの結果を見て SATBridge に以降は偽としてほしい真偽の組合せを伝達する
+			foreach (expr; res.newConstraints)
+			{
+				satBridge.addAssertion(expr);
+			}
+		}
+		return ok;
 	}
 
 	/**
@@ -284,42 +335,62 @@ class SMTSolver
 	 */
 	bool addAssertion(Expression expr)
 	{
-		import satd;
-
-		// TODO: implement
-		SATBridge bridge = new SATBridge(expr);
-		string strFormula = bridge.parseAssertion(expr);
-
-		strFormula.writeln;
-		expr.writeln;
-
-		auto solver = new CDCLSolver();
-		auto tseytin = tseytinTransform(strFormula);
-		solver.initialize(tseytin.parseResult);
-		auto res = solver.solve();
-		auto literals = res.peek!(Literal[]);
-		auto assignemnt = resultToOriginalVarsAssignment(tseytin, *literals);
-
+		satBridge.addAssertion(expr);
 		return true;
 	}
 }
 
 class SATBridge
 {
-	Expression expr;
 	bool[Expression] truth;
 	/// SAT ソルバーに渡した変数の名前から元の Expression への対応を保持
 	Expression[string] SATVarToExpr;
+	CDCLSolver satSolver = new CDCLSolver();
 
-	this(Expression expr)
+	private string[] strAssertions;
+
+	/**
+	 * 与えられた Expression を制約として考慮します。
+	 */
+	void addAssertion(Expression expr)
 	{
-		this.expr = expr;
+		strAssertions ~= this.parseAssertion(expr);
+	}
+
+	/**
+	 * 現在の制約から SAT ソルバに必要条件を満たすような制約の真偽の割り当てを取得します。
+	 * SAT ソルバの結果が UNSAT であったとき、null を返します。
+	 */
+	bool[Expression] getAssignmentFromSATSolver()
+	{
+		auto tmp = format("%-((%s) /\\ %))", strAssertions);
+		tmp.writeln;
+		auto tseytin = tseytinTransform(tmp);
+
+		// TODO: sat-d で、現在の状態を維持したまま複数回 tseytin の結果を受け取れるようにする
+		// そうしないといちいち new CDCLSolver(); でインスタンスを生成しなければ
+		// 複数回 assert と check-sat が走ったときに処理ができない
+		satSolver = new CDCLSolver();
+		satSolver.initialize(tseytin.parseResult);
+		auto literals = satSolver.solve().peek!(Literal[]);
+		// UNSAT なら null を返す
+		if (literals == null)
+			return null;
+		bool[string] assignment = resultToOriginalVarsAssignment(tseytin, *literals);
+
+		// 制約を表す式と、それに対する真偽値
+		bool[Expression] res;
+		foreach (varName, value; assignment)
+		{
+			res[SATVarToExpr[varName]] = value;
+		}
+		return res;
 	}
 
 	/**
 	 * 与えられた Expression を命題論理式を表した文字列に変換します。
 	 */
-	string parseAssertion(Expression expr)
+	private string parseAssertion(Expression expr)
 	{
 		if (auto eqExpr = cast(EqualExpression) expr)
 		{
