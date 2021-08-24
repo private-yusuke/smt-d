@@ -5,7 +5,7 @@
 	"copyright": "Copyright © 2021, public_yusuke",
 	"dependencies": {
 		"pegged": "~>0.4.5",
-		"sat-d": "~>1.0.0"
+		"sat-d": "~>1.0.1"
 	},
 	"description": "A small SMT solver implementation",
 	"license": "MIT",
