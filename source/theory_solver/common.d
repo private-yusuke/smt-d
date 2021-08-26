@@ -1,6 +1,6 @@
 module smtd.theory_solver.common;
 
-import smtd.statement;
+import smtd.expression;
 
 /**
  * すべての理論ソルバの基底クラス

@@ -1,4 +1,4 @@
-module smtd.statement;
+module smtd.expression;
 
 import smtd.app;
 import std.string;

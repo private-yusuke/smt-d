@@ -1,7 +1,7 @@
 module smtd.theory_solver.qf_uf_solver;
 
 import smtd.theory_solver.common;
-import smtd.statement;
+import smtd.expression;
 import smtd.util.unionfind;
 import std.range : zip, array;
 import std.container : RedBlackTree, redBlackTree;

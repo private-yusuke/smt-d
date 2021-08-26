@@ -1,6 +1,6 @@
 module smtd.app;
 
-import smtd.statement;
+import smtd.expression;
 import smtd.theory_solver;
 
 import std.stdio;
