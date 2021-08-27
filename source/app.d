@@ -34,11 +34,11 @@ const auto content = `(set-logic QF_UF)
 (set-option :produce-models true)
 (declare-sort U 0)
 (declare-fun x () U)
+(declare-fun y () U)
 (declare-fun f (U) U)
-(declare-fun g (U) U)
-(assert (= (f x) (f y)))
+(assert (= x y))
 (check-sat)
-(assert (not (= x y)))
+(assert (not (= (f x) (f y))))
 (check-sat)`;
 
 void main()
@@ -261,15 +261,20 @@ class SMTSolver
 	 */
 	bool setLogic(string logic)
 	{
+		this.tSolver = getTheorySolver(logic);
+		this.logic = logic;
+		return true;
+	}
+
+	private TheorySolver getTheorySolver(string logic)
+	{
 		switch (logic)
 		{
 		case "QF_UF":
-			this.tSolver = new QF_UF_Solver();
-			break;
+			return new QF_UF_Solver();
 		default:
 			throw new Exception("Logic other than QF_UF is not yet supported: %s".format(logic));
 		}
-		return true;
 	}
 
 	/**
@@ -298,6 +303,8 @@ class SMTSolver
 				break;
 			}
 
+			assignment.writeln;
+
 			eqConstraints = assignment.byPair
 				.filter!(p => p.value)
 				.map!(p => p.key)
@@ -325,11 +332,12 @@ class SMTSolver
 				break;
 			}
 
+			writeln("UNSAT by theory solver");
+
 			// 理論ソルバの結果を見て SATBridge に以降は偽としてほしい真偽の組合せを伝達する
 			foreach (expr; res.newConstraints)
 			{
-				writeln("UNSAT by theory solver");
-				satBridge.addAssertion(expr);
+				satBridge.addAssertion(new NotExpression(expr));
 			}
 		}
 		return ok;
@@ -393,16 +401,12 @@ class SATBridge
 		if (literals == null)
 			return null;
 		bool[string] assignment = resultToOriginalVarsAssignment(tseytin, *literals);
-		assignment.writeln;
 
 		// 制約を表す式と、それに対する真偽値
 		bool[Expression] res;
 		foreach (varName, value; assignment)
 		{
-			writeln(varName);
-			writeln(value);
 			assert(varName in SATVarToExpr);
-			assert(SATVarToExpr[varName] in res);
 			res[SATVarToExpr[varName]] = value;
 		}
 		return res;

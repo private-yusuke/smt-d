@@ -45,15 +45,34 @@ class Sort
 	{
 		return this.name;
 	}
+
+	override int opCmp(Object other)
+	{
+		auto sort = cast(Sort) other;
+		return sort && name == sort.name && arity == sort.arity;
+	}
 }
 
 // ソルバー内で扱われる形式
 class Expression
 {
+	override size_t toHash() @safe nothrow
+	{
+		return 0;
+	}
+
+	override bool opEquals(Object other)
+	{
+		return true;
+	}
 }
 
 class EmptyExpression : Expression
 {
+	override size_t toHash() @safe nothrow
+	{
+		return 1;
+	}
 }
 
 class FunctionExpression : Expression
@@ -89,6 +108,12 @@ class FunctionExpression : Expression
 		}
 		return applyingFunction.hashOf(argumentsHash);
 	}
+
+	override bool opEquals(Object other)
+	{
+		FunctionExpression fExpr = cast(FunctionExpression) other;
+		return fExpr && applyingFunction == fExpr.applyingFunction && arguments == fExpr.arguments;
+	}
 }
 
 class SortExpression : Expression
@@ -98,6 +123,12 @@ class SortExpression : Expression
 	this(Sort sort)
 	{
 		this.sort = sort;
+	}
+
+	override bool opEquals(Object other)
+	{
+		auto sExpr = cast(SortExpression) other;
+		return sExpr && sort == sExpr.sort;
 	}
 }
 
@@ -150,6 +181,12 @@ class SymbolExpression : Expression
 	override size_t toHash() @safe nothrow
 	{
 		return name.hashOf();
+	}
+
+	override int opCmp(Object other)
+	{
+		auto sExpr = cast(SymbolExpression) other;
+		return sExpr && name == sExpr.name;
 	}
 }
 
