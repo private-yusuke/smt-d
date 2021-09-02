@@ -17,40 +17,49 @@ import satd.tseytin : tseytinTransform, resultToOriginalVarsAssignment;
 
 mixin(grammar(`
 SExpression:
-	SExpr   <  Keyword / UnaryOp / Symbol / Attribute / Float / Integer / SpecialString / String / List
-	Integer <~ '0' / [1-9][0-9]*
-	Float   <~ ('0' / [1-9][0-9]*) '.' [0-9]*
-	String  <~ '\"' [^\"]* '\"'
-	SpecialString  <~ '|' .* '|'
-	Symbol  <~ [a-zA-Z_$\-][a-zA-Z0-9_$\-]*
-	Attribute  <~ ':' [a-zA-Z_\-][a-zA-Z0-9_\-]*
-	List    < '(' SExpr* ')'
+	Grammar < SExpr+
+	SExpr   <  Keyword / UnaryOp / Symbol / Attribute / Float / Integer / String / List
+	Integer <- '0' / [1-9][0-9]*
+	Float   <- ('0' / [1-9][0-9]*) '.' [0-9]*
+	String  < DoublequotedString / WysiwygString
+	DoublequotedString <~ :doublequote (!doublequote Char)* :doublequote
+	WysiwygString <~ :'|' (!'|' WysiwygChar)* :'|'
+	Symbol  <~ !Keyword [a-zA-Z_$\-][a-zA-Z0-9_$\-]*
+	Attribute  <~ :':' !Keyword [a-zA-Z_\-][a-zA-Z0-9_\-]*
+	List    <- '(' SExpr* ')'
 
 	Keyword < "set-option" / "not" / "and" / "or"
 	UnaryOp < '='
+	Char    <~ backslash ( doublequote
+					  / quote
+					  / backslash
+					  )
+					  / .
+	WysiwygChar <- . / ' ' / '\t' / '\r\n' / '\n' / '\r'
 `));
 
 const auto content = `(set-logic QF_UF)
 (set-option :produce-models true)
+(set-info :category "crafted")
+(set-info :attribute |
+test|)
 (declare-sort U 0)
 (declare-fun x () U)
 (declare-fun y () U)
-(declare-fun f (U) U)
-(assert (= x y))
+(declare-fun f (U U) U)
+(assert (= (f a b) a))
 (check-sat)
-(assert (not (= (f x) (f y))))
+(assert (not (= (f (f a b) b) a)))
 (check-sat)`;
 
 void main()
 {
 	auto solver = new SMTSolver();
 
-	// char[] buf;
-	// while (stdin.readln(buf))
-	foreach (buf; content.split('\n'))
+	auto parseTree = SExpression(content);
+	foreach (sExpr; parseTree.children.front.children)
 	{
-		auto parseTree = SExpression(buf.to!string);
-		auto expr = solver.parseTree(parseTree);
+		auto expr = solver.parseTree(sExpr);
 		solver.runExpression(expr);
 	}
 }
@@ -98,8 +107,9 @@ class SMTSolver
 	{
 		switch (tree.name)
 		{
-		case "SExpression.SExpr", "SExpression":
-			return parseTree(tree.children[0]);
+		case "SExpression.SExpr", "SExpression.Grammar",
+				"SExpression":
+				return parseTree(tree.children[0]);
 		case "SExpression.List":
 			auto statements = tree.children.map!(child => parseTree(child)).array;
 			if (statements.length == 0)
@@ -168,6 +178,12 @@ class SMTSolver
 		case "SExpression.UnaryOp",
 				"SExpression.Keyword":
 				return new SymbolExpression(tree.matches.front);
+		case "SExpression.String":
+			return parseTree(tree.children[0]);
+		case "SExpression.DoublequotedString":
+			return new StringExpression(tree.matches.front);
+		case "SExpression.WysiwygString":
+			return new StringExpression(tree.matches.front.strip);
 		default:
 			throw new Exception("Unknown node: %s (%s)".format(tree.name, tree.matches.front));
 		}
@@ -357,6 +373,19 @@ class SMTSolver
 	 */
 	bool addAssertion(Expression expr)
 	{
+		/*
+		 * TODO: 与えられた式の部分式の型が通っているか確認する。
+		 * 現状では、
+		 * (declare-fun f (U U) U)
+		 * (declare-fun a () U)
+		 * (declare-fun b () U)
+		 * (assert (= (f a) (f b)))
+		 * のような入力が普通に通ってしまう。QF_UF の世界では今は項の型は確認せずに
+		 * 関数の名前だけ見て区別しており、かつ現在は結果が SAT であっても具体的な関数の
+		 * assignment はソルバーから提供していないため問題にはなっていないが、今後のことを
+		 * 考えると確認するような実装を入れた方が絶対に良いと思う（利用するベンチマーク用の
+		 * 入力が必ず valid であるものだ、という保障があるならそこまでピリピリしなくてもまだ良いかも）
+		 */
 		satBridge.addAssertion(expr);
 		return true;
 	}
