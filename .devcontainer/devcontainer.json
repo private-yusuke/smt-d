@@ -1,0 +1,11 @@
+{
+    "image": "dlang2/dmd-ubuntu",
+    "extensions": [
+        "webfreak.code-d",
+        "webfreak.debug"
+    ],
+    "settings": {
+        "d.dmdPath": "ldmd2",
+        "editor.formatOnSave": true
+    }
+}
