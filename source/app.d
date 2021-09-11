@@ -50,6 +50,7 @@ test|)
 (assert (= (f a b) a))
 (check-sat)
 (assert (not (= (f (f a b) b) a)))
+(assert (let ((v1 (f a b))) (= v1 v1)))
 (check-sat)`;
 
 void main()
@@ -131,6 +132,10 @@ class SMTSolver
 			{
 				return new NotExpression(statements[1]);
 			}
+			if (head == "let")
+			{
+				return expandLet(cast(ListExpression) statements[1], statements[2]);
+			}
 			if (head in functions)
 			{
 				return new FunctionExpression(functions[head], statements[1 .. $]);
@@ -188,7 +193,6 @@ class SMTSolver
 			throw new Exception("Unknown node: %s (%s)".format(tree.name, tree.matches.front));
 		}
 	}
-
 	/**
 	 * 与えられた Expression をソルバー上で処理します。
 	 */
@@ -389,86 +393,154 @@ class SMTSolver
 		satBridge.addAssertion(expr);
 		return true;
 	}
-}
-
-/**
- * SAT ソルバと SMT ソルバの間でやりとりをするためのクラス
- */
-class SATBridge
-{
-	bool[Expression] truth;
-	/// SAT ソルバーに渡した変数の名前から元の Expression への対応を保持
-	Expression[string] SATVarToExpr;
-	CDCLSolver satSolver = new CDCLSolver();
-
-	private string[] strAssertions;
 
 	/**
-	 * 与えられた Expression を制約として考慮します。
+	 * let 式を展開します。
 	 */
-	void addAssertion(Expression expr)
+	Expression expandLet(ListExpression bindList, Expression expr)
 	{
-		strAssertions ~= this.parseAssertion(expr);
+		if (!bindList)
+		{
+			throw new Exception("Invalid binds for let expression");
+		}
+		BindExpression[] binds = bindList.elements
+			.map!(bind => cast(ListExpression) bind)
+			.tee!(bind => typeid(bind.elements[0]).writeln)
+			.tee!(bind => typeid(bind.elements[1]).writeln)
+			.map!(lst => new BindExpression(cast(SymbolExpression) lst.elements[0], lst.elements[1]))
+			.array;
+
+		foreach (bind; binds)
+		{
+			expr = _expandLet(bind, expr);
+		}
+
+		return expr;
+	}
+
+	private Expression _expandLet(BindExpression bind, Expression expr)
+	{
+		if (auto fExpr = cast(FunctionExpression) expr)
+		{
+			return new FunctionExpression(fExpr.applyingFunction,
+					fExpr.arguments.map!(e => _expandLet(bind, e)).array);
+		}
+		if (auto lExpr = cast(ListExpression) expr)
+		{
+			return new ListExpression(lExpr.elements.map!(e => _expandLet(bind, e)).array);
+		}
+		if (auto bExpr = cast(BindExpression) expr)
+		{
+			return new BindExpression(bExpr.symbol, _expandLet(bind, bExpr.expr));
+		}
+		if (auto nExpr = cast(NotExpression) expr)
+		{
+			return new NotExpression(_expandLet(bind, nExpr.child));
+		}
+		if (auto aExpr = cast(AndExpression) expr)
+		{
+			return new AndExpression(_expandLet(bind, aExpr.lhs), _expandLet(bind, aExpr.rhs));
+		}
+		if (auto oExpr = cast(OrExpression) expr)
+		{
+			return new OrExpression(_expandLet(bind, oExpr.lhs), _expandLet(bind, oExpr.rhs));
+		}
+		if (auto eExpr = cast(EqualExpression) expr)
+		{
+			return new EqualExpression(_expandLet(bind, eExpr.lhs), _expandLet(bind, eExpr.rhs));
+		}
+		if (auto sExpr = cast(SymbolExpression) expr)
+		{
+			if (sExpr == bind.symbol)
+			{
+				return bind.expr;
+			}
+			else
+				return sExpr;
+		}
+
+		throw new Exception("Unknown expression: %s".format(expr));
 	}
 
 	/**
-	 * 現在の制約から SAT ソルバに必要条件を満たすような制約の真偽の割り当てを取得します。
-	 * SAT ソルバの結果が UNSAT であったとき、null を返します。
-	 */
-	bool[Expression] getAssignmentFromSATSolver()
+	* SAT ソルバと SMT ソルバの間でやりとりをするためのクラス
+	*/
+	class SATBridge
 	{
-		auto tmp = format("%-((%s) /\\ %))", strAssertions);
-		auto tseytin = tseytinTransform(tmp);
+		bool[Expression] truth;
+		/// SAT ソルバーに渡した変数の名前から元の Expression への対応を保持
+		Expression[string] SATVarToExpr;
+		CDCLSolver satSolver = new CDCLSolver();
 
-		// TODO: sat-d で、現在の状態を維持したまま複数回 tseytin の結果を受け取れるようにする
-		// そうしないといちいち new CDCLSolver(); でインスタンスを生成しなければ
-		// 複数回 assert と check-sat が走ったときに処理ができない
-		satSolver = new CDCLSolver();
-		satSolver.initialize(tseytin.parseResult);
-		auto literals = satSolver.solve().peek!(Literal[]);
-		// UNSAT なら null を返す
-		if (literals == null)
-			return null;
-		bool[string] assignment = resultToOriginalVarsAssignment(tseytin, *literals);
+		private string[] strAssertions;
 
-		// 制約を表す式と、それに対する真偽値
-		bool[Expression] res;
-		foreach (varName, value; assignment)
+		/**
+		* 与えられた Expression を制約として考慮します。
+		*/
+		void addAssertion(Expression expr)
 		{
-			assert(varName in SATVarToExpr);
-			res[SATVarToExpr[varName]] = value;
+			strAssertions ~= this.parseAssertion(expr);
 		}
-		return res;
-	}
 
-	/**
-	 * 与えられた Expression を命題論理式を表した文字列に変換します。
-	 */
-	private string parseAssertion(Expression expr)
-	{
-		if (auto eqExpr = cast(EqualExpression) expr)
+		/**
+		* 現在の制約から SAT ソルバに必要条件を満たすような制約の真偽の割り当てを取得します。
+		* SAT ソルバの結果が UNSAT であったとき、null を返します。
+		*/
+		bool[Expression] getAssignmentFromSATSolver()
 		{
-			// eq に入ったら、その中の木を hash として考えられるようにする
-			string varName = format("EQ%d", expr.toHash());
-			SATVarToExpr[varName] = eqExpr;
-			return varName;
+			auto tmp = format("%-((%s) /\\ %))", strAssertions);
+			auto tseytin = tseytinTransform(tmp);
+
+			// TODO: sat-d で、現在の状態を維持したまま複数回 tseytin の結果を受け取れるようにする
+			// そうしないといちいち new CDCLSolver(); でインスタンスを生成しなければ
+			// 複数回 assert と check-sat が走ったときに処理ができない
+			satSolver = new CDCLSolver();
+			satSolver.initialize(tseytin.parseResult);
+			auto literals = satSolver.solve().peek!(Literal[]);
+			// UNSAT なら null を返す
+			if (literals == null)
+				return null;
+			bool[string] assignment = resultToOriginalVarsAssignment(tseytin, *literals);
+
+			// 制約を表す式と、それに対する真偽値
+			bool[Expression] res;
+			foreach (varName, value; assignment)
+			{
+				assert(varName in SATVarToExpr);
+				res[SATVarToExpr[varName]] = value;
+			}
+			return res;
 		}
-		if (auto neqExpr = cast(NotExpression) expr)
+
+		/**
+		* 与えられた Expression を命題論理式を表した文字列に変換します。
+		*/
+		private string parseAssertion(Expression expr)
 		{
-			// neq に入ったら、その中にあるであろう eq な Expression を期待する
-			return format("-(%s)", this.parseAssertion(neqExpr.child));
+			if (auto eqExpr = cast(EqualExpression) expr)
+			{
+				// eq に入ったら、その中の木を hash として考えられるようにする
+				string varName = format("EQ%d", expr.toHash());
+				SATVarToExpr[varName] = eqExpr;
+				return varName;
+			}
+			if (auto neqExpr = cast(NotExpression) expr)
+			{
+				// neq に入ったら、その中にあるであろう eq な Expression を期待する
+				return format("-(%s)", this.parseAssertion(neqExpr.child));
+			}
+			if (auto andExpr = cast(AndExpression) expr)
+			{
+				return format("(%s) /\\ (%s)", this.parseAssertion(andExpr.lhs),
+						this.parseAssertion(andExpr.rhs));
+			}
+			if (auto orExpr = cast(OrExpression) expr)
+			{
+				return format("(%s) \\/ (%s)", this.parseAssertion(orExpr.lhs),
+						this.parseAssertion(orExpr.rhs));
+			}
+			throw new Exception("Unknown statement while parsing assertion: %s (%s)".format(expr,
+					typeid(expr)));
 		}
-		if (auto andExpr = cast(AndExpression) expr)
-		{
-			return format("(%s) /\\ (%s)", this.parseAssertion(andExpr.lhs),
-					this.parseAssertion(andExpr.rhs));
-		}
-		if (auto orExpr = cast(OrExpression) expr)
-		{
-			return format("(%s) \\/ (%s)", this.parseAssertion(orExpr.lhs),
-					this.parseAssertion(orExpr.rhs));
-		}
-		throw new Exception("Unknown statement while parsing assertion: %s (%s)".format(expr,
-				typeid(expr)));
 	}
 }

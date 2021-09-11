@@ -159,6 +159,23 @@ class ListExpression : Expression
 	}
 }
 
+class BindExpression : Expression
+{
+	SymbolExpression symbol;
+	Expression expr;
+
+	this(SymbolExpression symbol, Expression expr)
+	{
+		this.symbol = symbol;
+		this.expr = expr;
+	}
+
+	override string toString()
+	{
+		return format("%s := %s", this.symbol, this.expr);
+	}
+}
+
 class SymbolExpression : Expression
 {
 	string name;
