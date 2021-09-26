@@ -1,5 +1,5 @@
 {
-    "image": "dlang2/dmd-ubuntu",
+    "dockerFile": "Dockerfile",
     "extensions": [
         "webfreak.code-d",
         "webfreak.debug"
