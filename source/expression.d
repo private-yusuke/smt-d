@@ -67,6 +67,14 @@ class Expression
 	}
 }
 
+/*
+ * 文字列を表すような式
+ */
+interface ExpressionWithString
+{
+	string stringValue();
+}
+
 class EmptyExpression : Expression
 {
 	override size_t toHash() @safe nothrow
@@ -176,7 +184,7 @@ class BindExpression : Expression
 	}
 }
 
-class SymbolExpression : Expression
+class SymbolExpression : Expression, ExpressionWithString
 {
 	string name;
 
@@ -188,6 +196,11 @@ class SymbolExpression : Expression
 	Sort toSort(SMTSolver solver)
 	{
 		return solver.sorts[name];
+	}
+
+	string stringValue()
+	{
+		return this.name;
 	}
 
 	override string toString()
@@ -252,18 +265,32 @@ class FloatExpression : Expression
 	}
 }
 
-class StringExpression : Expression
+class StringExpression : Expression, ExpressionWithString
 {
+	enum InputType
+	{
+		DOUBLEQUOTED,
+		WYSIWYG
+	}
+
 	string value;
 
-	this(string value)
+	InputType inputType;
+
+	this(string value, InputType inputType)
 	{
 		this.value = value;
+		this.inputType = inputType;
+	}
+
+	string stringValue()
+	{
+		return this.value;
 	}
 
 	override size_t toHash() @safe nothrow
 	{
-		return value.hashOf();
+		return value.hashOf(inputType.hashOf());
 	}
 }
 

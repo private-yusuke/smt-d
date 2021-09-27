@@ -43,7 +43,7 @@ const auto content = `(set-logic QF_UF)
 (set-info :category "crafted")
 (set-info :attribute |
 test|)
-(declare-sort U 0)
+(declare-sort |U| 0)
 (declare-fun x () U)
 (declare-fun y () U)
 (declare-fun f (U U) U)
@@ -186,9 +186,10 @@ class SMTSolver
 		case "SExpression.String":
 			return parseTree(tree.children[0]);
 		case "SExpression.DoublequotedString":
-			return new StringExpression(tree.matches.front);
+			return new StringExpression(tree.matches.front, StringExpression.InputType.DOUBLEQUOTED);
 		case "SExpression.WysiwygString":
-			return new StringExpression(tree.matches.front.strip);
+			return new StringExpression(tree.matches.front.strip,
+					StringExpression.InputType.WYSIWYG);
 		default:
 			throw new Exception("Unknown node: %s (%s)".format(tree.name, tree.matches.front));
 		}
@@ -205,11 +206,11 @@ class SMTSolver
 			case "assert":
 				return addAssertion(fexpr.arguments[0]);
 			case "declare-sort":
-				auto symbolExpr = cast(SymbolExpression) fexpr.arguments[0];
+				auto exprWithString = cast(ExpressionWithString) fexpr.arguments[0];
 				auto intExpr = cast(IntegerExpression) fexpr.arguments[1];
-				return declareSort(symbolExpr.name, intExpr.value);
+				return declareSort(exprWithString.stringValue, intExpr.value);
 			case "declare-fun":
-				string funcName = (cast(SymbolExpression) fexpr.arguments[0]).name;
+				string funcName = (cast(ExpressionWithString) fexpr.arguments[0]).stringValue;
 				Sort outType = (cast(SortExpression) fexpr.arguments[2]).sort;
 
 				// declaring a constant
