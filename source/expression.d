@@ -220,18 +220,23 @@ class SymbolExpression : Expression, ExpressionWithString
 	}
 }
 
-class AttributeExpression : Expression
+class KeywordExpression : Expression, ExpressionWithString
 {
-	string attribution;
+	string keyword;
 
-	this(string attribution)
+	this(string keyword)
 	{
-		this.attribution = attribution;
+		this.keyword = keyword;
+	}
+
+	string stringValue()
+	{
+		return this.keyword;
 	}
 
 	override size_t toHash() @safe nothrow
 	{
-		return attribution.hashOf();
+		return keyword.hashOf();
 	}
 }
 

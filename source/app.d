@@ -15,20 +15,26 @@ import satd.solvers.cdcl;
 import satd.cnf : Literal;
 import satd.tseytin : tseytinTransform, resultToOriginalVarsAssignment;
 
+const string[] keywords = [
+	"set-option", "not", "and", "or", "declare-sort", "declare-fun",
+	"declare-const", "assert", "=", "not", "set-info", "set-logic", "check-sat",
+	"exit"
+];
+
 mixin(grammar(`
 SExpression:
 	Grammar < SExpr+
-	SExpr   <  Keyword / UnaryOp / Symbol / Attribute / Float / Integer / String / List
+	SExpr   <  ReservedWord / UnaryOp / Symbol / Keyword / Float / Integer / String / List
 	Integer <- '0' / [1-9][0-9]*
 	Float   <- ('0' / [1-9][0-9]*) '.' [0-9]*
 	String  < DoublequotedString / WysiwygString
 	DoublequotedString <~ :doublequote (!doublequote Char)* :doublequote
 	WysiwygString <~ :'|' (!'|' WysiwygChar)* :'|'
-	Symbol  <~ !Keyword [a-zA-Z_$\-][a-zA-Z0-9_$\-]*
-	Attribute  <~ :':' !Keyword [a-zA-Z_\-][a-zA-Z0-9_\-]*
+	Symbol  <~ !ReservedWord [a-zA-Z_$\-][a-zA-Z0-9_$\-]*
+	Keyword  <~ :':' !ReservedWord [a-zA-Z_\-][a-zA-Z0-9_\-]*
 	List    <- '(' SExpr* ')'
 
-	Keyword < "set-option" / "not" / "and" / "or"
+	ReservedWord <  %-(%s / %)
 	UnaryOp < '='
 	Char    <~ backslash ( doublequote
 					  / quote
@@ -36,12 +42,12 @@ SExpression:
 					  )
 					  / .
 	WysiwygChar <- . / ' ' / '\t' / '\r\n' / '\n' / '\r'
-`));
+`.format(keywords.map!(s => `"` ~ s ~ `"`))));
 
 const auto content = `(set-logic QF_UF)
 (set-option :produce-models true)
 (set-info :category "crafted")
-(set-info :attribute |
+(set-info :keyword |
 test|)
 (declare-sort |U| 0)
 (declare-fun x () U)
@@ -89,8 +95,8 @@ class SMTSolver
 	void initialize()
 	{
 		const string[] keywords = [
-			"declare-sort", "declare-fun", "assert", "=", "not", "set-info",
-			"set-logic", "check-sat", "exit"
+			"declare-sort", "declare-fun", "declare-const", "assert", "=",
+			"not", "set-info", "set-logic", "check-sat", "exit"
 		];
 		foreach (keyword; keywords)
 		{
@@ -178,10 +184,10 @@ class SMTSolver
 			return new IntegerExpression(tree.matches.front.to!long);
 		case "SExpression.Float":
 			return new FloatExpression(tree.matches.front.to!float);
-		case "SExpression.Attribute":
-			return new AttributeExpression(tree.matches.front);
+		case "SExpression.Keyword":
+			return new KeywordExpression(tree.matches.front);
 		case "SExpression.UnaryOp",
-				"SExpression.Keyword":
+				"SExpression.ReservedWord":
 				return new SymbolExpression(tree.matches.front);
 		case "SExpression.String":
 			return parseTree(tree.children[0]);
@@ -229,7 +235,7 @@ class SMTSolver
 				string logicName = (cast(SymbolExpression) fexpr.arguments[0]).name;
 				return setLogic(logicName);
 			case "set-info":
-				string name = (cast(AttributeExpression) fexpr.arguments[0]).attribution;
+				string name = (cast(KeywordExpression) fexpr.arguments[0]).keyword;
 				string content = (cast(StringExpression) fexpr.arguments[1]).value;
 				return setInfo(name, content);
 			case "check-sat":
@@ -255,7 +261,7 @@ class SMTSolver
 		}
 		if (arity != 0)
 		{
-			throw new Exception("sort arith other than 0 is not yet supported");
+			throw new Exception("sort arity other than 0 is not yet supported");
 		}
 		auto s = new Sort(name, arity);
 		sorts[name] = s;
@@ -301,9 +307,9 @@ class SMTSolver
 	/**
 	 * ソルバーに伝達したい補助的な情報を設定します。
 	 */
-	bool setInfo(string attribute, string content)
+	bool setInfo(string keyword, string content)
 	{
-		this.attributes[attribute] = content;
+		this.attributes[keyword] = content;
 		return true;
 	}
 
