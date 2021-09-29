@@ -76,8 +76,10 @@ alias Pair(T) = Tuple!(T, "fst", T, "snd");
 /// SMT Solver
 class SMTSolver
 {
+	/// set-logic で与えられた、現在扱う理論
 	string logic;
-	string[string] attributes;
+	/// set-info で与えられた補助的な情報
+	string[string] info;
 
 	Sort[string] sorts;
 	Function[string] functions;
@@ -150,25 +152,6 @@ class SMTSolver
 			{
 				return new ListExpression(statements);
 			}
-
-			// if(tree.children.length > 1) {
-			// 	auto res = new Expression;
-			// 	string functionKey = tree.children.front.matches.front;
-			// 	if(functionKey in functions) {
-			// 		res.applyingFunction = functions[functionKey];
-			// 		res.arguments = tree.children[1..$].map!(child => parseTree(child)).array;
-			// 		return res;
-			// 	}
-			// 	throw new Exception("No such function: %s".format(functionKey));
-			// }
-			// if(tree.children.length == 1) {
-			// 	auto res = new Expression;
-			// 	res.name = tree.children.front.matches.front;
-			// 	return res;
-			// }
-
-			// // returns empty Expression
-			// return new Expression;
 		case "SExpression.Symbol":
 			string name = tree.matches.front;
 			if (name in sorts)
@@ -309,7 +292,7 @@ class SMTSolver
 	 */
 	bool setInfo(string keyword, string content)
 	{
-		this.attributes[keyword] = content;
+		this.info[keyword] = content;
 		return true;
 	}
 
@@ -470,11 +453,10 @@ class SMTSolver
 	}
 
 	/**
-	* SAT ソルバと SMT ソルバの間でやりとりをするためのクラス
-	*/
+	 * SAT ソルバと SMT ソルバの間でやりとりをするためのクラス
+	 */
 	class SATBridge
 	{
-		bool[Expression] truth;
 		/// SAT ソルバーに渡した変数の名前から元の Expression への対応を保持
 		Expression[string] SATVarToExpr;
 		CDCLSolver satSolver = new CDCLSolver();
@@ -482,17 +464,17 @@ class SMTSolver
 		private string[] strAssertions;
 
 		/**
-		* 与えられた Expression を制約として考慮します。
-		*/
+	 	 * 与えられた Expression を制約として考慮します。
+		 */
 		void addAssertion(Expression expr)
 		{
 			strAssertions ~= this.parseAssertion(expr);
 		}
 
 		/**
-		* 現在の制約から SAT ソルバに必要条件を満たすような制約の真偽の割り当てを取得します。
-		* SAT ソルバの結果が UNSAT であったとき、null を返します。
-		*/
+		 * 現在の制約から SAT ソルバに必要条件を満たすような制約の真偽の割り当てを取得します。
+		 * SAT ソルバの結果が UNSAT であったとき、null を返します。
+		 */
 		bool[Expression] getAssignmentFromSATSolver()
 		{
 			auto tmp = format("%-((%s) /\\ %))", strAssertions);
@@ -520,8 +502,8 @@ class SMTSolver
 		}
 
 		/**
-		* 与えられた Expression を命題論理式を表した文字列に変換します。
-		*/
+		 * 与えられた Expression を命題論理式を表した文字列に変換します。
+		 */
 		private string parseAssertion(Expression expr)
 		{
 			if (auto eqExpr = cast(EqualExpression) expr)
