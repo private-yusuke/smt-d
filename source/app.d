@@ -65,6 +65,9 @@ test|)
 (assert (not (and (= (f a b) (f b a)) (not (= (f (f a b) b) (f a (f a b)))))))
 (assert (not (or (= (f a b) (f b a)) (not (= (f (f a b) b) (f a (f a b)))))))
 (check-sat)
+(declare-fun x () Bool)
+(assert (and x (not x)))
+(check-sat)
 `;
 
 void main()
@@ -78,8 +81,6 @@ void main()
 		solver.runExpression(expr);
 	}
 }
-
-alias Pair(T) = Tuple!(T, "fst", T, "snd");
 
 /// SMT Solver
 class SMTSolver
