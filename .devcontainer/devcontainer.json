@@ -7,5 +7,8 @@
     "settings": {
         "d.dmdPath": "ldmd2",
         "editor.formatOnSave": true
+    },
+    "containerEnv": {
+        "EDITOR": "code --wait"
     }
 }
