@@ -2,6 +2,8 @@ module smtd.app;
 
 import smtd.expression;
 import smtd.theory_solver;
+import smtd.type_checker;
+import smtd.type_environment;
 
 import std.stdio;
 import std.string;
@@ -50,14 +52,20 @@ const auto content = `(set-logic QF_UF)
 (set-info :keyword |
 test|)
 (declare-sort |U| 0)
-(declare-fun x () U)
-(declare-fun y () U)
+(declare-fun a () U)
+(declare-fun b () U)
 (declare-fun f (U U) U)
+(assert (and (= a b) (= b a)))
+(assert (let ((e (= a b))) (or e (not e))))
+(check-sat)
+(assert (let ((v1 (f a b))) (= v1 (f v1 b))))
 (assert (= (f a b) a))
 (check-sat)
 (assert (not (= (f (f a b) b) a)))
-(assert (let ((v1 (f a b))) (= v1 v1)))
-(check-sat)`;
+(assert (not (and (= (f a b) (f b a)) (not (= (f (f a b) b) (f a (f a b)))))))
+(assert (not (or (= (f a b) (f b a)) (not (= (f (f a b) b) (f a (f a b)))))))
+(check-sat)
+`;
 
 void main()
 {
@@ -81,12 +89,9 @@ class SMTSolver
 	/// set-info で与えられた補助的な情報
 	string[string] info;
 
-	Sort[string] sorts;
-	Function[string] functions;
-	Expression[] eqConstraints;
-	Expression[] neqConstraints;
-	SATBridge satBridge;
-	TheorySolver tSolver;
+	private SATBridge satBridge;
+	private TheorySolver tSolver;
+	private TypeEnvironment env = new TypeEnvironment;
 
 	this()
 	{
@@ -96,16 +101,18 @@ class SMTSolver
 	/// ソルバーを初期化します。
 	void initialize()
 	{
-		const string[] keywords = [
-			"declare-sort", "declare-fun", "declare-const", "assert", "=",
-			"not", "set-info", "set-logic", "check-sat", "exit"
+		env.declareSort("Bool", 0);
+
+		const string[] commands = [
+			"declare-sort", "declare-fun", "declare-const", "assert",
+			"set-info", "set-logic", "check-sat", "exit"
 		];
-		foreach (keyword; keywords)
+		foreach (command; commands)
 		{
-			functions[keyword] = new Function(keyword, null, null);
+			env.declareFunction(command, null, null);
 		}
 
-		this.satBridge = new SATBridge();
+		this.satBridge = new SATBridge(this.env);
 	}
 
 	/**
@@ -144,9 +151,9 @@ class SMTSolver
 			{
 				return expandLet(cast(ListExpression) statements[1], statements[2]);
 			}
-			if (head in functions)
+			if (env.functionExists(head))
 			{
-				return new FunctionExpression(functions[head], statements[1 .. $]);
+				return new FunctionExpression(env.getFunction(head), statements[1 .. $]);
 			}
 			else
 			{
@@ -154,13 +161,13 @@ class SMTSolver
 			}
 		case "SExpression.Symbol":
 			string name = tree.matches.front;
-			if (name in sorts)
+			if (env.sortExists(name))
 			{
-				return new SortExpression(sorts[name]);
+				return new SortExpression(env.getSort(name));
 			}
-			if (name in functions)
+			if (env.functionExists(name))
 			{
-				return new FunctionExpression(functions[name]);
+				return new FunctionExpression(env.getFunction(name));
 			}
 			return new SymbolExpression(name);
 		case "SExpression.Integer":
@@ -197,7 +204,7 @@ class SMTSolver
 			case "declare-sort":
 				auto exprWithString = cast(ExpressionWithString) fexpr.arguments[0];
 				auto intExpr = cast(IntegerExpression) fexpr.arguments[1];
-				return declareSort(exprWithString.stringValue, intExpr.value);
+				return env.declareSort(exprWithString.stringValue, intExpr.value);
 			case "declare-fun":
 				string funcName = (cast(ExpressionWithString) fexpr.arguments[0]).stringValue;
 				Sort outType = (cast(SortExpression) fexpr.arguments[2]).sort;
@@ -205,15 +212,14 @@ class SMTSolver
 				// declaring a constant
 				if (auto eexpr = cast(EmptyExpression) fexpr.arguments[1])
 				{
-					return declareFunction(funcName, [], outType);
+					return env.declareFunction(funcName, [], outType);
 				}
 				if (auto lexpr = cast(ListExpression) fexpr.arguments[1])
 				{
 					Sort[] inTypes = lexpr.elements.map!(s => (cast(SortExpression) s).sort).array;
-					return declareFunction(funcName, inTypes, outType);
+					return env.declareFunction(funcName, inTypes, outType);
 				}
 				throw new Exception("not a valid declare-fun");
-				// return declareFunction(fexpr.arguments[0].name, fexpr.arguments[1].arguments.map!(v => v.name).array, expr.arguments[2].name);
 			case "set-logic":
 				string logicName = (cast(SymbolExpression) fexpr.arguments[0]).name;
 				return setLogic(logicName);
@@ -230,40 +236,6 @@ class SMTSolver
 			}
 		}
 		return false;
-	}
-
-	/**
-	 * 新しい sort を定義します。
-	 * [WIP] arity が 0 以外の場合はまだサポートされていません。
-	 */
-	bool declareSort(string name, ulong arity)
-	{
-		if (name in sorts)
-		{
-			throw new Exception("Sort name duplicated; consider renaming it");
-		}
-		if (arity != 0)
-		{
-			throw new Exception("sort arity other than 0 is not yet supported");
-		}
-		auto s = new Sort(name, arity);
-		sorts[name] = s;
-		return true;
-	}
-
-	/**
-	 * 新しい関数を定義します。
-	 */
-	bool declareFunction(string name, Sort[] inTypes, Sort outType)
-	{
-		if (name in functions)
-		{
-			throw new Exception("Function name duplicated; consider renaming it");
-		}
-
-		auto f = new Function(name, inTypes, outType);
-		functions[name] = f;
-		return true;
 	}
 
 	/**
@@ -315,22 +287,21 @@ class SMTSolver
 
 			assignment.writeln;
 
-			eqConstraints = assignment.byPair
+			auto trueConstraints = assignment.byPair
 				.filter!(p => p.value)
 				.map!(p => p.key)
 				.array;
-			neqConstraints = assignment.byPair
+			auto falseConstraints = assignment.byPair
 				.filter!(p => !p.value)
 				.map!(p => p.key)
 				.array;
 
-			writeln("===== eqConstraints =====");
-			this.eqConstraints.each!writeln;
-			writeln("===== neqConstraints =====");
-			this.neqConstraints.each!writeln;
+			writeln("===== trueConstraints =====");
+			trueConstraints.each!writeln;
+			writeln("===== falseConstraints =====");
+			falseConstraints.each!writeln;
 
-			tSolver.eqConstraints = cast(EqualExpression[]) eqConstraints;
-			tSolver.neqConstraints = cast(EqualExpression[]) neqConstraints;
+			tSolver.setConstraints(trueConstraints, falseConstraints);
 
 			auto res = tSolver.solve();
 
@@ -367,21 +338,13 @@ class SMTSolver
 	 */
 	bool addAssertion(Expression expr)
 	{
-		/*
-		 * TODO: 与えられた式の部分式の型が通っているか確認する。
-		 * 現状では、
-		 * (declare-fun f (U U) U)
-		 * (declare-fun a () U)
-		 * (declare-fun b () U)
-		 * (assert (= (f a) (f b)))
-		 * のような入力が普通に通ってしまう。QF_UF の世界では今は項の型は確認せずに
-		 * 関数の名前だけ見て区別しており、かつ現在は結果が SAT であっても具体的な関数の
-		 * assignment はソルバーから提供していないため問題にはなっていないが、今後のことを
-		 * 考えると確認するような実装を入れた方が絶対に良いと思う（利用するベンチマーク用の
-		 * 入力が必ず valid であるものだ、という保障があるならそこまでピリピリしなくてもまだ良いかも）
-		 */
-		satBridge.addAssertion(expr);
-		return true;
+		if (TypeChecker.checkValidExpression(env, expr))
+		{
+			satBridge.addAssertion(expr);
+			return true;
+		}
+		else
+			throw new Exception("This expression is invalid: %s".format(expr));
 	}
 
 	/**
@@ -395,8 +358,6 @@ class SMTSolver
 		}
 		BindExpression[] binds = bindList.elements
 			.map!(bind => cast(ListExpression) bind)
-			.tee!(bind => typeid(bind.elements[0]).writeln)
-			.tee!(bind => typeid(bind.elements[1]).writeln)
 			.map!(lst => new BindExpression(cast(SymbolExpression) lst.elements[0], lst.elements[1]))
 			.array;
 
@@ -458,10 +419,16 @@ class SMTSolver
 	class SATBridge
 	{
 		/// SAT ソルバーに渡した変数の名前から元の Expression への対応を保持
-		Expression[string] SATVarToExpr;
-		CDCLSolver satSolver = new CDCLSolver();
+		private Expression[string] SATVarToExpr;
+		private CDCLSolver satSolver = new CDCLSolver();
+		private TypeEnvironment env;
 
 		private string[] strAssertions;
+
+		this(TypeEnvironment env)
+		{
+			this.env = env;
+		}
 
 		/**
 	 	 * 与えられた Expression を制約として考慮します。
@@ -502,6 +469,36 @@ class SMTSolver
 		}
 
 		/**
+		 * 与えられた名前 varName で SAT ソルバーにて取り扱う Expression を登録します。与えられる Expression は原子論理式に対応するものであることを期待します。
+		 */
+		void registerSATVar(string varName, Expression expr)
+		{
+			auto ptr = varName in SATVarToExpr;
+			if (ptr != null)
+				throw new Exception("SAT variable \"%s\" already exists".format(varName));
+			SATVarToExpr[varName] = expr;
+		}
+
+		/**
+		 * 与えられた名前 varName に対応する Expression を返します。存在しない場合は例外が投げられます。
+		 */
+		Expression getExprFromSATVar(string varName)
+		{
+			auto ptr = varName in SATVarToExpr;
+			if (ptr == null)
+				throw new Exception("Expression with name \"%s\" doesn\'t exist".format(varName));
+			return *ptr;
+		}
+
+		/**
+		 * 与えられた名前 varName に対応する Expression が存在する場合は真を、そうでない場合は偽を返します。
+		 */
+		bool SATVarExists(string varName)
+		{
+			return (varName in SATVarToExpr) != null;
+		}
+
+		/**
 		 * 与えられた Expression を命題論理式を表した文字列に変換します。
 		 */
 		private string parseAssertion(Expression expr)
@@ -510,7 +507,8 @@ class SMTSolver
 			{
 				// eq に入ったら、その中の木を hash として考えられるようにする
 				string varName = format("EQ%d", expr.toHash());
-				SATVarToExpr[varName] = eqExpr;
+				if (!SATVarExists(varName))
+					registerSATVar(varName, eqExpr);
 				return varName;
 			}
 			if (auto neqExpr = cast(NotExpression) expr)
@@ -527,6 +525,19 @@ class SMTSolver
 			{
 				return format("(%s) \\/ (%s)", this.parseAssertion(orExpr.lhs),
 						this.parseAssertion(orExpr.rhs));
+			}
+			if (auto fExpr = cast(FunctionExpression) expr)
+			{
+				auto f = fExpr.applyingFunction;
+
+				auto args = fExpr.arguments;
+				if (TypeChecker.getSortOfExpression(env, fExpr) == env.getSort("Bool"))
+				{
+					string varName = format("BOOL%d", expr.toHash());
+					if (!SATVarExists(varName))
+						registerSATVar(varName, fExpr);
+					return varName;
+				}
 			}
 			throw new Exception("Unknown statement while parsing assertion: %s (%s)".format(expr,
 					typeid(expr)));

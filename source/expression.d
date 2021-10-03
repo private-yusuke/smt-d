@@ -193,11 +193,6 @@ class SymbolExpression : Expression, ExpressionWithString
 		this.name = name;
 	}
 
-	Sort toSort(SMTSolver solver)
-	{
-		return solver.sorts[name];
-	}
-
 	string stringValue()
 	{
 		return this.name;

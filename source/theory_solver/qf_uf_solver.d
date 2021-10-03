@@ -14,6 +14,34 @@ import std.algorithm;
  */
 class QF_UF_Solver : TheorySolver
 {
+    // 等号に関する制約
+    private EqualExpression[] eqConstraints;
+    // 不等号に関する制約
+    private EqualExpression[] neqConstraints;
+
+    this(Expression[] trueConstraints, Expression[] falseConstraints)
+    {
+        super(trueConstraints, falseConstraints);
+    }
+
+    this()
+    {
+        super();
+    }
+
+    override void setConstraints(Expression[] trueConstraints, Expression[] falseConstraints)
+    {
+        super.setConstraints(trueConstraints, falseConstraints);
+
+        // 等号に関する制約を抽出したものを保持する
+        this.eqConstraints = trueConstraints.map!(c => cast(EqualExpression) c)
+            .filter!(c => c)
+            .array;
+        this.neqConstraints = falseConstraints.map!(c => cast(EqualExpression) c)
+            .filter!(c => c)
+            .array;
+    }
+
     override TheorySolverResult solve()
     {
         CongruenceClosure congruenceClosure = new CongruenceClosure;
@@ -41,12 +69,11 @@ class QF_UF_Solver : TheorySolver
             {
                 // UNSATISFIABLE
                 // TODO: reason を返すようにする
-                return new TheorySolverResult(false,
-                        cast(Expression[])(u.reason.array ~ v.reason.array));
+                return TheorySolverResult(false, cast(Expression[])(u.reason.array ~ v.reason.array));
             }
         }
         // SATISFIABLE
-        return new TheorySolverResult(true, []);
+        return TheorySolverResult(true, []);
     }
 }
 
