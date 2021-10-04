@@ -12,11 +12,17 @@ class TheorySolver
     // SAT ソルバーによって偽が割り当てられた制約
     private Expression[] falseConstraints;
 
+    /**
+     * SAT ソルバーで真偽が定まっている制約をそれぞれ与えて初期化します。
+     */
     this(Expression[] trueConstraints, Expression[] falseConstraints)
     {
         setConstraints(trueConstraints, falseConstraints);
     }
 
+    /**
+     * 制約を持たない状態で初期化します。
+     */
     this()
     {
     }

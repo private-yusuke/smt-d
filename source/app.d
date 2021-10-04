@@ -131,6 +131,8 @@ class SMTSolver
 			auto statements = tree.children.map!(child => parseTree(child)).array;
 			if (statements.length == 0)
 				return new EmptyExpression;
+
+			// 構文木の上では List として受け取るが、特殊な関数やユーザー定義の関数の呼び出しである場合はここで適切な Expression に変換する
 			string head = tree.children.front.matches.front;
 			if (head == "=")
 			{
@@ -370,6 +372,9 @@ class SMTSolver
 		return expr;
 	}
 
+	/**
+	 * let 式を展開します（実際に式の置換を行うメソッド）。
+	 */
 	private Expression _expandLet(BindExpression bind, Expression expr)
 	{
 		if (auto fExpr = cast(FunctionExpression) expr)
@@ -512,10 +517,9 @@ class SMTSolver
 					registerSATVar(varName, eqExpr);
 				return varName;
 			}
-			if (auto neqExpr = cast(NotExpression) expr)
+			if (auto notExpr = cast(NotExpression) expr)
 			{
-				// neq に入ったら、その中にあるであろう eq な Expression を期待する
-				return format("-(%s)", this.parseAssertion(neqExpr.child));
+				return format("-(%s)", this.parseAssertion(notExpr.child));
 			}
 			if (auto andExpr = cast(AndExpression) expr)
 			{
@@ -529,16 +533,17 @@ class SMTSolver
 			}
 			if (auto fExpr = cast(FunctionExpression) expr)
 			{
-				auto f = fExpr.applyingFunction;
-
-				auto args = fExpr.arguments;
-				if (TypeChecker.getSortOfExpression(env, fExpr) == env.getSort("Bool"))
+				auto sort = TypeChecker.getSortOfExpression(env, fExpr);
+				if (sort == env.getSort("Bool"))
 				{
 					string varName = format("BOOL%d", expr.toHash());
 					if (!SATVarExists(varName))
 						registerSATVar(varName, fExpr);
 					return varName;
 				}
+				else
+					throw new Exception("Excepted return value to be a Bool, but got %s with %s".format(sort,
+							fExpr));
 			}
 			throw new Exception("Unknown statement while parsing assertion: %s (%s)".format(expr,
 					typeid(expr)));
