@@ -5,6 +5,7 @@ import smtd.expression;
 import smtd.util.unionfind;
 import std.range : zip, array;
 import std.container : RedBlackTree, redBlackTree;
+import std.string : format;
 
 import std.stdio;
 import std.algorithm;
@@ -45,16 +46,18 @@ class QF_UF_Solver : TheorySolver
     override TheorySolverResult solve()
     {
         CongruenceClosure congruenceClosure = new CongruenceClosure;
+
+        // 等号に関する制約のうちに含まれている式を congruence closure の中に入れる
         foreach (expr; eqConstraints ~ neqConstraints)
         {
-            congruenceClosure.getNodeOfExpr(expr.lhs);
-            congruenceClosure.getNodeOfExpr(expr.rhs);
+            congruenceClosure.registerExpression(expr.lhs);
+            congruenceClosure.registerExpression(expr.rhs);
         }
 
         foreach (eqExpr; eqConstraints)
         {
-            auto u = congruenceClosure.getNodeOfExpr(eqExpr.lhs);
-            auto v = congruenceClosure.getNodeOfExpr(eqExpr.rhs);
+            auto u = congruenceClosure.getNodeOfExpression(eqExpr.lhs);
+            auto v = congruenceClosure.getNodeOfExpression(eqExpr.rhs);
             u.reason.insert(eqExpr);
             v.reason.insert(eqExpr);
             congruenceClosure.merge(u, v);
@@ -62,8 +65,8 @@ class QF_UF_Solver : TheorySolver
 
         foreach (neqExpr; neqConstraints)
         {
-            auto u = congruenceClosure.getNodeOfExpr(neqExpr.lhs);
-            auto v = congruenceClosure.getNodeOfExpr(neqExpr.rhs);
+            auto u = congruenceClosure.getNodeOfExpression(neqExpr.lhs);
+            auto v = congruenceClosure.getNodeOfExpression(neqExpr.rhs);
 
             if (congruenceClosure.same(u, v))
             {
@@ -129,7 +132,7 @@ private class CongruenceClosure
     private UnionFind!long uf = new UnionFind!long(100);
 
     /// 式から頂点への対応
-    Node[Expression] exprToNode;
+    private Node[Expression] exprToNode;
 
     /// 頂点と非負整数を一対一に対応させたときの、頂点から非負整数への対応
     ulong[Node] nodeToIndex;
@@ -205,12 +208,31 @@ private class CongruenceClosure
             return predecessors[node];
     }
 
-    Node getNodeOfExpr(Expression expr)
+    /**
+     * 与えられた式に対応する congruence closure 内の頂点を返します。
+     */
+    Node getNodeOfExpression(Expression expr)
     {
-        // 与えられた式に対応する頂点がすでにグラフ内にあったら追加処理をしない
+        return exprToNode[expr];
+    }
+
+    /**
+     * 与えられた式に対応する congruence closure 内の頂点が存在する場合は真を、そうでなければ偽を返します。
+     */
+    bool nodeOfExpressionExists(Expression expr)
+    {
+        return (expr in exprToNode) != null;
+    }
+
+    /**
+     * 与えられた式を congruence closure 内の頂点として追加します。すでに追加されていたら偽を返します。
+     */
+    bool registerExpression(Expression expr)
+    {
+        // 与えられた式に対応する頂点がすでにグラフ内にあったら
         if (expr in exprToNode)
         {
-            return exprToNode[expr];
+            return false;
         }
 
         if (auto fExpr = cast(FunctionExpression) expr)
@@ -219,21 +241,22 @@ private class CongruenceClosure
 
             foreach (argExpr; fExpr.arguments)
             {
-                Node argNode = getNodeOfExpr(argExpr);
+                registerExpression(argExpr);
+                Node argNode = getNodeOfExpression(argExpr);
                 addSuccessor(fNode, argNode);
                 addPredecessor(argNode, fNode);
             }
 
             addNode(fNode);
             exprToNode[expr] = fNode;
-            return fNode;
+            return true;
         }
         else if (auto sExpr = cast(SymbolExpression) expr)
         {
             Node sNode = new Node(sExpr);
             addNode(sNode);
             exprToNode[expr] = sNode;
-            return sNode;
+            return true;
         }
         else
             assert(0, "Only FunctionExpression or SymbolExpression can be added to the DAG");
