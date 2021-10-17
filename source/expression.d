@@ -1,6 +1,5 @@
 module smtd.expression;
 
-import smtd.app;
 import std.string;
 import std.range;
 import std.conv;
