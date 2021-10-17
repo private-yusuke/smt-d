@@ -17,7 +17,8 @@ import satd.solvers.cdcl;
 import satd.cnf : Literal;
 import satd.tseytin : tseytinTransform, resultToOriginalVarsAssignment;
 
-const string[] keywords = [
+/// 予約語
+const string[] reservedWords = [
 	"set-option", "not", "and", "or", "declare-sort", "declare-fun",
 	"declare-const", "assert", "=", "not", "set-info", "set-logic", "check-sat",
 	"exit"
@@ -44,8 +45,9 @@ SExpression:
 					  )
 					  / .
 	WysiwygChar <- . / ' ' / '\t' / '\r\n' / '\n' / '\r'
-`.format(keywords.map!(s => `"` ~ s ~ `"`))));
+`.format(reservedWords.map!(s => `"` ~ s ~ `"`))));
 
+/// テスト用の入力
 const auto content = `(set-logic QF_UF)
 (set-option :produce-models true)
 (set-info :category "crafted")
@@ -54,18 +56,8 @@ test|)
 (declare-sort |U| 0)
 (declare-fun a () U)
 (declare-fun b () U)
-(declare-fun f (U U) U)
-(assert (and (= a b) (= b a)))
-(assert (let ((e (= a b))) (or e (not e))))
-(check-sat)
-(assert (let ((v1 (f a b))) (= v1 (f v1 b))))
-(assert (= (f a b) a))
-(check-sat)
-(assert (not (= (f (f a b) b) a)))
-(assert (not (and (= (f a b) (f b a)) (not (= (f (f a b) b) (f a (f a b)))))))
-(assert (not (or (= (f a b) (f b a)) (not (= (f (f a b) b) (f a (f a b)))))))
-(check-sat)
 (declare-fun x () Bool)
+(declare-fun f (U U) U)
 (assert (and x (not x)))
 (check-sat)
 `;
@@ -278,7 +270,7 @@ class SMTSolver
 		bool ok = false;
 		while (!ok)
 		{
-			auto assignment = satBridge.getAssignmentFromSATSolver();
+			const auto assignment = satBridge.getAssignmentFromSATSolver();
 			// SAT ソルバが解いた結果、UNSAT だったら諦める
 			if (assignment == null)
 			{
@@ -474,7 +466,7 @@ class SMTSolver
 		 */
 		void registerSATVar(string varName, Expression expr)
 		{
-			auto ptr = varName in SATVarToExpr;
+			const auto ptr = varName in SATVarToExpr;
 			if (ptr != null)
 				throw new Exception("SAT variable \"%s\" already exists".format(varName));
 			SATVarToExpr[varName] = expr;
@@ -529,9 +521,6 @@ class SMTSolver
 			}
 			if (auto fExpr = cast(FunctionExpression) expr)
 			{
-				auto f = fExpr.applyingFunction;
-
-				auto args = fExpr.arguments;
 				if (TypeChecker.getSortOfExpression(env, fExpr) == env.getSort("Bool"))
 				{
 					string varName = format("BOOL%d", expr.toHash());
