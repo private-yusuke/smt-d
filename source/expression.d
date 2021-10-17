@@ -13,7 +13,9 @@ bool instanceOf(T)(Object obj)
 class Function
 {
 	string name;
+	/// 関数の第1引数、第2引数、…… の sort
 	Sort[] inTypes;
+	/// 関数の返り値の sort
 	Sort outType;
 
 	this(string name, Sort[] inTypes, Sort outType)
@@ -25,7 +27,6 @@ class Function
 
 	override string toString()
 	{
-		// return format("%s(%(%s, %) -> %s)", name, inTypes, outType);
 		return this.name;
 	}
 }
@@ -53,7 +54,7 @@ class Sort
 	}
 }
 
-// ソルバー内で扱われる形式
+/// ソルバー内で入力から起こされるような式すべての基底クラス
 class Expression
 {
 	override size_t toHash() @safe nothrow
@@ -75,6 +76,7 @@ interface ExpressionWithString
 	string stringValue();
 }
 
+/// 空リストを表す式
 class EmptyExpression : Expression
 {
 	override size_t toHash() @safe nothrow
@@ -83,9 +85,12 @@ class EmptyExpression : Expression
 	}
 }
 
+/// 関数適用を表す式
 class FunctionExpression : Expression
 {
+	/// 適用する関数
 	Function applyingFunction;
+	/// 関数の第1引数、第2引数、…… となる式
 	Expression[] arguments;
 
 	this(Function applyingFunction)
@@ -124,6 +129,7 @@ class FunctionExpression : Expression
 	}
 }
 
+/// sort を表す式
 class SortExpression : Expression
 {
 	Sort sort;
@@ -140,6 +146,7 @@ class SortExpression : Expression
 	}
 }
 
+/// リストを表す式（空リストは EmptyExpression）
 class ListExpression : Expression
 {
 	Expression[] elements;
@@ -167,6 +174,7 @@ class ListExpression : Expression
 	}
 }
 
+/// let 式内の変数束縛の部分を表す式
 class BindExpression : Expression
 {
 	SymbolExpression symbol;
@@ -184,6 +192,7 @@ class BindExpression : Expression
 	}
 }
 
+/// 既に定義された関数や sort を表すための symbol を表す式
 class SymbolExpression : Expression, ExpressionWithString
 {
 	string name;
@@ -215,6 +224,7 @@ class SymbolExpression : Expression, ExpressionWithString
 	}
 }
 
+/// 予約語の式
 class KeywordExpression : Expression, ExpressionWithString
 {
 	string keyword;
@@ -235,6 +245,7 @@ class KeywordExpression : Expression, ExpressionWithString
 	}
 }
 
+/// 整数値を表す式
 class IntegerExpression : Expression
 {
 	long value;
@@ -250,6 +261,7 @@ class IntegerExpression : Expression
 	}
 }
 
+/// 浮動小数点数を表す式
 class FloatExpression : Expression
 {
 	float value;
@@ -265,8 +277,10 @@ class FloatExpression : Expression
 	}
 }
 
+/// 文字列を表す式
 class StringExpression : Expression, ExpressionWithString
 {
+	/// 入力されたときにどのように与えられた文字列であるか
 	enum InputType
 	{
 		DOUBLEQUOTED,
@@ -294,6 +308,7 @@ class StringExpression : Expression, ExpressionWithString
 	}
 }
 
+/// 単一の引数のみ持つような関数呼び出しに見えて、その関数が予約語であった場合を表す式
 class UnaryOpExpression : Expression
 {
 	Expression child;
@@ -309,6 +324,7 @@ class UnaryOpExpression : Expression
 	}
 }
 
+/// 予約語 not を使った場合を表す式
 class NotExpression : UnaryOpExpression
 {
 	this(Expression child)
@@ -327,6 +343,7 @@ class NotExpression : UnaryOpExpression
 	}
 }
 
+/// 2つの引数のみ持つような関数呼び出しに見えて、その関数が予約語であった場合を表す式
 class BinaryOpExpression : Expression
 {
 	Expression lhs, rhs;
@@ -343,7 +360,12 @@ class BinaryOpExpression : Expression
 	}
 }
 
-/// 与えられた引数の位置が交換可能なアリティ2の演算子を表すデータ構造
+/**
+ * 与えられた引数の位置が交換可能なアリティ2の演算子を表す式（=, and, or など）
+ * このような式を特別に考えたくなるのは、= や and, or の引数の順序は実際のところ真偽に関係しないので、
+ * (= x y) を (= y x) といつでも同等に考えたいという需要があるため
+ * そのため、hash 値を用いて (= x y) または (= y x) のどちらかが一方の式に自動的に書き変わるようにしたい
+ */
 class CommutativeBinaryOpExpression : BinaryOpExpression
 {
 	this(Expression lhs, Expression rhs)
@@ -359,6 +381,7 @@ class CommutativeBinaryOpExpression : BinaryOpExpression
 	}
 }
 
+/// (and lhs rhs) を表す式
 class AndExpression : CommutativeBinaryOpExpression
 {
 	this(Expression lhs, Expression rhs)
@@ -377,6 +400,7 @@ class AndExpression : CommutativeBinaryOpExpression
 	}
 }
 
+/// (or lhs rhs) を表す式
 class OrExpression : CommutativeBinaryOpExpression
 {
 	this(Expression lhs, Expression rhs)
@@ -395,6 +419,7 @@ class OrExpression : CommutativeBinaryOpExpression
 	}
 }
 
+/// (= lhs rhs) を表す式
 class EqualExpression : CommutativeBinaryOpExpression
 {
 	this(Expression lhs, Expression rhs)

@@ -6,6 +6,7 @@ import std.algorithm : map, all;
 import std.range : array;
 import std.string : format;
 
+/// 型チェックを行うための関数が集まった静的クラス
 static class TypeChecker
 {
     /**
