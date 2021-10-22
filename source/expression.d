@@ -428,7 +428,7 @@ class EqualExpression : CommutativeBinaryOpExpression
 
 	override size_t toHash() @safe nothrow
 	{
-		return lhs.hashOf(rhs.hashOf()) + 2;
+		return lhs.hashOf(rhs.hashOf()) + 3;
 	}
 
 	override string toString()
