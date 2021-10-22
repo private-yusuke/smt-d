@@ -4,6 +4,7 @@ import smtd.expression;
 import smtd.theory_solver;
 import smtd.type_checker;
 import smtd.type_environment;
+import smtd.rational;
 
 import std.stdio;
 import std.string;
@@ -12,6 +13,7 @@ import std.algorithm : map, each, filter;
 import std.conv;
 import std.typecons : Tuple;
 import std.exception : basicExceptionCtors;
+import std.bigint : BigInt;
 import pegged.grammar;
 import satd.solvers.cdcl;
 import satd.cnf : Literal;
@@ -20,8 +22,8 @@ import satd.tseytin : tseytinTransform, resultToOriginalVarsAssignment;
 /// 予約語
 const string[] reservedWords = [
 	"set-option", "not", "and", "or", "declare-sort", "declare-fun",
-	"declare-const", "assert", "=", "not", "set-info", "set-logic", "check-sat",
-	"exit"
+	"declare-const", "assert", "not", "set-info", "set-logic", "check-sat",
+	"exit", "+", "-", "*", "/", "<=", ">=", "<", ">", "="
 ];
 
 mixin(grammar(`
@@ -53,12 +55,12 @@ const auto content = `(set-logic QF_UF)
 (set-info :category "crafted")
 (set-info :keyword |
 test|)
-(declare-sort |U| 0)
-(declare-fun a () U)
-(declare-fun b () U)
-(declare-fun x () Bool)
-(declare-fun f (U U) U)
-(assert (and x (not x)))
+(declare-fun a () Real)
+(declare-fun b () Real)
+(assert (< a b))
+(assert (> a b))
+(assert (<= a b))
+(assert (>= a b))
 (check-sat)
 `;
 
@@ -95,6 +97,7 @@ class SMTSolver
 	void initialize()
 	{
 		env.declareSort("Bool", 0);
+		env.declareSort("Real", 0);
 
 		const string[] commands = [
 			"declare-sort", "declare-fun", "declare-const", "assert",
@@ -135,6 +138,22 @@ class SMTSolver
 				return new OrExpression(statements[1], statements[2]);
 			case "not":
 				return new NotExpression(statements[1]);
+			case "+":
+				return new AdditionExpression(statements[1], statements[2]);
+			case "-":
+				return new SubtractionExpression(statements[1], statements[2]);
+			case "*":
+				return new MultiplicationExpression(statements[1], statements[2]);
+			case "/":
+				return new DivisionExpression(statements[1], statements[2]);
+			case "<":
+				return new LessThanExpression(statements[1], statements[2]);
+			case ">":
+				return new GreaterThanExpression(statements[1], statements[2]);
+			case "<=":
+				return new LessThanOrEqualExpression(statements[1], statements[2]);
+			case ">=":
+				return new GreaterThanOrEqualExpression(statements[1], statements[2]);
 			case "let":
 				return expandLet(cast(ListExpression) statements[1], statements[2]);
 			default:
@@ -160,6 +179,7 @@ class SMTSolver
 			}
 			return new SymbolExpression(name);
 		case "SExpression.Integer":
+			// return new RationalExpression!BigInt(new BigIntRational(BigInt(tree.matches.front)));
 			return new IntegerExpression(tree.matches.front.to!long);
 		case "SExpression.Float":
 			return new FloatExpression(tree.matches.front.to!float);
@@ -524,6 +544,28 @@ class SMTSolver
 						registerSATVar(varName, fExpr);
 					return varName;
 				}
+			}
+			if (auto lExpr = cast(LessThanExpression) expr)
+			{
+				string varName = format("LT%d", lExpr.toHash());
+				if (!SATVarExists(varName))
+					registerSATVar(varName, lExpr);
+				return varName;
+			}
+
+			if (auto gExpr = cast(GreaterThanExpression) expr)
+			{
+				return parseAssertion(gExpr.toLessThanExpression());
+			}
+
+			if (auto leExpr = cast(LessThanOrEqualExpression) expr)
+			{
+				return parseAssertion(leExpr.toOrExpression());
+			}
+
+			if (auto geExpr = cast(GreaterThanOrEqualExpression) expr)
+			{
+				return parseAssertion(geExpr.toLessThanOrEqualExpression());
 			}
 			throw new Exception("Unknown statement while parsing assertion: %s (%s)".format(expr,
 					typeid(expr)));

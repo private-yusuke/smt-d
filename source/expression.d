@@ -538,6 +538,11 @@ class GreaterThanExpression : BinaryOpExpression
 	{
 		return format("%s > %s", lhs.toString(), rhs.toString());
 	}
+
+	LessThanExpression toLessThanExpression()
+	{
+		return new LessThanExpression(rhs, lhs);
+	}
 }
 
 // OrExpression の形に変換できるようなもの
@@ -581,6 +586,11 @@ class GreaterThanOrEqualExpression : BinaryOpExpression, OrExpressionConvertible
 	OrExpression toOrExpression()
 	{
 		return new OrExpression(new GreaterThanExpression(lhs, rhs), new EqualExpression(lhs, rhs));
+	}
+
+	LessThanOrEqualExpression toLessThanOrEqualExpression()
+	{
+		return new LessThanOrEqualExpression(rhs, lhs);
 	}
 }
 
