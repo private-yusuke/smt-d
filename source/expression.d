@@ -415,3 +415,23 @@ class EqualExpression : CommutativeBinaryOpExpression
 		return format("%s = %s", lhs.toString(), rhs.toString());
 	}
 }
+
+unittest
+{
+	auto a = new Expression;
+	auto b = new EmptyExpression;
+
+	assert(a.hashOf() != b.hashOf());
+	assert(a.hashOf() == (new Expression).hashOf());
+	assert(b.hashOf() == (new EmptyExpression).hashOf());
+}
+
+unittest
+{
+	auto a = new AndExpression(new Expression, new Expression);
+	auto b = new OrExpression(new Expression, new Expression);
+
+	assert(a.hashOf() != b.hashOf());
+	assert(a.hashOf() == (new AndExpression(new Expression, new Expression)).hashOf());
+	assert(b.hashOf() == (new OrExpression(new Expression, new Expression)).hashOf());
+}
