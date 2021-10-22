@@ -58,7 +58,7 @@ class Expression
 {
 	override size_t toHash() @safe nothrow
 	{
-		return 0;
+		return typeid(this).name.hashOf();
 	}
 
 	override bool opEquals(Object other)
@@ -78,10 +78,6 @@ interface ExpressionWithString
 /// 空リストを表す式
 class EmptyExpression : Expression
 {
-	override size_t toHash() @safe nothrow
-	{
-		return 1;
-	}
 }
 
 /// 関数適用を表す式
@@ -118,7 +114,7 @@ class FunctionExpression : Expression
 		{
 			argumentsHash = arg.hashOf(argumentsHash);
 		}
-		return applyingFunction.hashOf(argumentsHash);
+		return applyingFunction.hashOf(argumentsHash.hashOf(typeid(this).name.hashOf()));
 	}
 
 	override bool opEquals(Object other)
@@ -169,7 +165,7 @@ class ListExpression : Expression
 		{
 			hash = elem.hashOf(hash);
 		}
-		return hash;
+		return hash.hashOf(typeid(this).name.hashOf());
 	}
 }
 
@@ -213,7 +209,7 @@ class SymbolExpression : Expression, ExpressionWithString
 
 	override size_t toHash() @safe nothrow
 	{
-		return name.hashOf();
+		return name.hashOf(typeid(this).hashOf());
 	}
 
 	override int opCmp(Object other)
@@ -240,7 +236,7 @@ class KeywordExpression : Expression, ExpressionWithString
 
 	override size_t toHash() @safe nothrow
 	{
-		return keyword.hashOf();
+		return keyword.hashOf(typeid(this).name.hashOf());
 	}
 }
 
@@ -256,7 +252,7 @@ class IntegerExpression : Expression
 
 	override size_t toHash() @safe nothrow
 	{
-		return value.hashOf();
+		return value.hashOf(typeid(this).name.hashOf());
 	}
 }
 
@@ -272,7 +268,7 @@ class FloatExpression : Expression
 
 	override size_t toHash() @safe nothrow
 	{
-		return value.hashOf();
+		return value.hashOf(typeid(this).name.hashOf());
 	}
 }
 
@@ -303,7 +299,7 @@ class StringExpression : Expression, ExpressionWithString
 
 	override size_t toHash() @safe nothrow
 	{
-		return value.hashOf(inputType.hashOf());
+		return value.hashOf(inputType.hashOf(typeid(this).name.hashOf()));
 	}
 }
 
@@ -319,7 +315,7 @@ class UnaryOpExpression : Expression
 
 	override size_t toHash() @safe nothrow
 	{
-		return child.hashOf() + 1;
+		return child.hashOf(typeid(this).name.hashOf());
 	}
 }
 
@@ -336,10 +332,6 @@ class NotExpression : UnaryOpExpression
 		return format("~(%s)", this.child);
 	}
 
-	override size_t toHash() @safe nothrow
-	{
-		return child.hashOf() + 2;
-	}
 }
 
 /// 2つの引数のみ持つような関数呼び出しに見えて、その関数が予約語であった場合を表す式
@@ -355,7 +347,7 @@ class BinaryOpExpression : Expression
 
 	override size_t toHash() @safe nothrow
 	{
-		return lhs.hashOf(rhs.hashOf());
+		return lhs.hashOf(rhs.hashOf(typeid(this).name.hashOf()));
 	}
 }
 
@@ -393,10 +385,6 @@ class AndExpression : CommutativeBinaryOpExpression
 		return format("(%s and %s)", lhs, rhs);
 	}
 
-	override size_t toHash() @safe nothrow
-	{
-		return lhs.hashOf(rhs.hashOf()) + 1;
-	}
 }
 
 /// (or lhs rhs) を表す式
@@ -412,10 +400,6 @@ class OrExpression : CommutativeBinaryOpExpression
 		return format("(%s or %s)", lhs, rhs);
 	}
 
-	override size_t toHash() @safe nothrow
-	{
-		return lhs.hashOf(rhs.hashOf()) + 2;
-	}
 }
 
 /// (= lhs rhs) を表す式
@@ -424,11 +408,6 @@ class EqualExpression : CommutativeBinaryOpExpression
 	this(Expression lhs, Expression rhs)
 	{
 		super(lhs, rhs);
-	}
-
-	override size_t toHash() @safe nothrow
-	{
-		return lhs.hashOf(rhs.hashOf()) + 3;
 	}
 
 	override string toString()
