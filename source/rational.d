@@ -133,6 +133,34 @@ class Rational(T) if (isIntegral!T || is(T : BigInt))
     {
         return numerator.hashOf(denominator.hashOf());
     }
+
+    int opCmp(R)(Rational!R other)
+    {
+        T v1 = numerator * other.denominator;
+        T v2 = other.numerator * denominator;
+
+        return v1.opCmp(v2);
+    }
+
+    unittest
+    {
+        auto r1 = new BigIntRational(2, 3);
+        auto r2 = new BigIntRational(3, 2);
+        assert(r1 < r2);
+        assert(r1 <= r2);
+        assert(!(r1 > r2));
+        assert(!(r1 >= r2));
+    }
+
+    unittest
+    {
+        auto r1 = new BigIntRational(200, 2);
+        auto r2 = new BigIntRational(100, 1);
+        assert(!(r1 < r2));
+        assert(r1 <= r2);
+        assert(!(r1 > r2));
+        assert(r1 >= r2);
+    }
 }
 
 alias BigIntRational = Rational!BigInt;
