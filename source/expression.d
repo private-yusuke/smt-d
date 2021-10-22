@@ -1,5 +1,6 @@
 module smtd.expression;
 
+import smtd.rational;
 import std.string;
 import std.range;
 import std.conv;
@@ -266,6 +267,22 @@ class IntegerExpression : Expression
 	}
 }
 
+/// 有理数を表す式
+class RationalExpression(T) : Expression
+{
+	Rational!T value;
+
+	this(Rational!T value)
+	{
+		this.value = value;
+	}
+
+	override size_t toHash() @safe nothrow
+	{
+		return value.hashOf(typeid(this).name.hashOf());
+	}
+}
+
 /// 浮動小数点数を表す式
 class FloatExpression : Expression
 {
@@ -434,4 +451,160 @@ unittest
 	assert(a.hashOf() != b.hashOf());
 	assert(a.hashOf() == (new AndExpression(new Expression, new Expression)).hashOf());
 	assert(b.hashOf() == (new OrExpression(new Expression, new Expression)).hashOf());
+}
+
+/// (+ lhs rhs) を表す式
+class AdditionExpression : CommutativeBinaryOpExpression
+{
+	this(Expression lhs, Expression rhs)
+	{
+		super(lhs, rhs);
+	}
+
+	override string toString()
+	{
+		return format("%s + %s", lhs.toString(), rhs.toString());
+	}
+}
+
+/// (- lhs rhs) を表す式
+class SubtractionExpression : BinaryOpExpression
+{
+	this(Expression lhs, Expression rhs)
+	{
+		super(lhs, rhs);
+	}
+
+	override string toString()
+	{
+		return format("%s - %s", lhs.toString(), rhs.toString());
+	}
+}
+
+/**
+ * (* lhs rhs) を表す式
+ * 理論によっては可換性がないかもしれない？
+ */
+class MultiplicationExpression : CommutativeBinaryOpExpression
+{
+	this(Expression lhs, Expression rhs)
+	{
+		super(lhs, rhs);
+	}
+
+	override string toString()
+	{
+		return format("%s * %s", lhs.toString(), rhs.toString());
+	}
+}
+
+/// (/ lhs rhs) を表す式
+class DivisionExpression : BinaryOpExpression
+{
+	this(Expression lhs, Expression rhs)
+	{
+		super(lhs, rhs);
+	}
+
+	override string toString()
+	{
+		return format("%s / %s", lhs.toString(), rhs.toString());
+	}
+}
+
+/// (< lhs rhs) を表す式
+class LessThanExpression : BinaryOpExpression
+{
+	this(Expression lhs, Expression rhs)
+	{
+		super(lhs, rhs);
+	}
+
+	override string toString()
+	{
+		return format("%s < %s", lhs.toString(), rhs.toString());
+	}
+}
+
+/// (> lhs rhs) を表す式
+class GreaterThanExpression : BinaryOpExpression
+{
+	this(Expression lhs, Expression rhs)
+	{
+		super(lhs, rhs);
+	}
+
+	override string toString()
+	{
+		return format("%s > %s", lhs.toString(), rhs.toString());
+	}
+}
+
+// OrExpression の形に変換できるようなもの
+interface OrExpressionConvertible
+{
+	OrExpression toOrExpression();
+}
+
+/// (<= lhs rhs) を表す式
+class LessThanOrEqualExpression : BinaryOpExpression, OrExpressionConvertible
+{
+	this(Expression lhs, Expression rhs)
+	{
+		super(lhs, rhs);
+	}
+
+	override string toString()
+	{
+		return format("%s <= %s", lhs.toString(), rhs.toString());
+	}
+
+	OrExpression toOrExpression()
+	{
+		return new OrExpression(new LessThanExpression(lhs, rhs), new EqualExpression(lhs, rhs));
+	}
+}
+
+/// (>= lhs rhs) を表す式
+class GreaterThanOrEqualExpression : BinaryOpExpression, OrExpressionConvertible
+{
+	this(Expression lhs, Expression rhs)
+	{
+		super(lhs, rhs);
+	}
+
+	override string toString()
+	{
+		return format("%s >= %s", lhs.toString(), rhs.toString());
+	}
+
+	OrExpression toOrExpression()
+	{
+		return new OrExpression(new GreaterThanExpression(lhs, rhs), new EqualExpression(lhs, rhs));
+	}
+}
+
+unittest
+{
+	import smtd.rational;
+	import std.bigint : BigInt;
+
+	alias RE = RationalExpression!BigInt;
+	alias R = Rational!BigInt;
+
+	auto rExpr1 = new RE(new R(5));
+	auto rExpr2 = new RE(new R(3));
+
+	auto ltExpr = new LessThanExpression(rExpr1, rExpr2);
+	auto eExpr = new EqualExpression(rExpr1, rExpr2);
+	auto leExpr = new LessThanOrEqualExpression(rExpr1, rExpr2);
+
+	assert(leExpr.toOrExpression() == new OrExpression(ltExpr, eExpr));
+	assert(leExpr.toOrExpression() == new OrExpression(eExpr, ltExpr));
+
+	auto gtExpr = new GreaterThanExpression(rExpr1, rExpr2);
+	auto geExpr = new GreaterThanOrEqualExpression(rExpr1, rExpr2);
+
+	assert(geExpr.toOrExpression() == new OrExpression(gtExpr, eExpr));
+	assert(geExpr.toOrExpression() == new OrExpression(eExpr, gtExpr));
 }
