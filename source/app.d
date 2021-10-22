@@ -124,25 +124,21 @@ class SMTSolver
 			if (statements.length == 0)
 				return new EmptyExpression;
 			string head = tree.children.front.matches.front;
-			if (head == "=")
+
+			switch (head)
 			{
+			case "=":
 				return new EqualExpression(statements[1], statements[2]);
-			}
-			if (head == "and")
-			{
+			case "and":
 				return new AndExpression(statements[1], statements[2]);
-			}
-			if (head == "or")
-			{
+			case "or":
 				return new OrExpression(statements[1], statements[2]);
-			}
-			if (head == "not")
-			{
+			case "not":
 				return new NotExpression(statements[1]);
-			}
-			if (head == "let")
-			{
+			case "let":
 				return expandLet(cast(ListExpression) statements[1], statements[2]);
+			default:
+				break;
 			}
 			if (env.functionExists(head))
 			{
