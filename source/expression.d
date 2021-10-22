@@ -80,6 +80,16 @@ class EmptyExpression : Expression
 {
 }
 
+unittest
+{
+	auto a = new Expression;
+	auto b = new EmptyExpression;
+
+	assert(a.hashOf() != b.hashOf());
+	assert(a.hashOf() == (new Expression).hashOf());
+	assert(b.hashOf() == (new EmptyExpression).hashOf());
+}
+
 /// 関数適用を表す式
 class FunctionExpression : Expression
 {
@@ -414,16 +424,6 @@ class EqualExpression : CommutativeBinaryOpExpression
 	{
 		return format("%s = %s", lhs.toString(), rhs.toString());
 	}
-}
-
-unittest
-{
-	auto a = new Expression;
-	auto b = new EmptyExpression;
-
-	assert(a.hashOf() != b.hashOf());
-	assert(a.hashOf() == (new Expression).hashOf());
-	assert(b.hashOf() == (new EmptyExpression).hashOf());
 }
 
 unittest
