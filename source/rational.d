@@ -3,6 +3,7 @@ module smtd.rational;
 import std.numeric : gcd;
 import std.math : abs;
 import std.traits : isIntegral;
+import std.bigint : BigInt;
 
 /**
  * 有理数を扱うためのデータ構造
@@ -35,6 +36,22 @@ class Rational(T) if (isIntegral!T || is(T : BigInt))
         assert(new R(-1, 2) == new R(1, -2));
 
         assert(new R(100, 250) == new R(2, 5));
+    }
+
+    /// 分子だけ与えて初期化
+    this(R)(R numerator)
+    {
+        import std.conv : to;
+
+        this(numerator.to!T, 1);
+    }
+
+    unittest
+    {
+        alias R = Rational!long;
+        alias B = Rational!BigInt;
+        assert(new R(2) == new R(2, 1));
+        assert(new B(2) == new B(2, 1));
     }
 
     /// 別々の型の値を2つ与えて初期化
@@ -117,8 +134,6 @@ class Rational(T) if (isIntegral!T || is(T : BigInt))
         return numerator.hashOf(denominator.hashOf());
     }
 }
-
-import std.bigint : BigInt;
 
 alias BigIntRational = Rational!BigInt;
 unittest
