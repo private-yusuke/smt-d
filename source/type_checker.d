@@ -6,6 +6,7 @@ import std.algorithm : map, all;
 import std.range : array;
 import std.string : format;
 
+/// 型チェックを行うための関数が集まった静的クラス
 static class TypeChecker
 {
     /**
@@ -14,6 +15,7 @@ static class TypeChecker
     static bool checkValidExpression(TypeEnvironment env, Expression expr)
     {
         auto boolSort = env.getSort("Bool");
+        auto realSort = env.getSort("Real");
 
         if (auto fExpr = cast(FunctionExpression) expr)
         {
@@ -41,6 +43,26 @@ static class TypeChecker
         {
             return getSortOfExpression(env, orExpr.lhs) == boolSort
                 && getSortOfExpression(env, orExpr.rhs) == boolSort;
+        }
+        if (auto lExpr = cast(LessThanExpression) expr)
+        {
+            return getSortOfExpression(env, lExpr.lhs) == realSort
+                && getSortOfExpression(env, lExpr.rhs) == realSort;
+        }
+        if (auto gExpr = cast(GreaterThanExpression) expr)
+        {
+            return getSortOfExpression(env, gExpr.lhs) == realSort
+                && getSortOfExpression(env, gExpr.rhs) == realSort;
+        }
+        if (auto leExpr = cast(LessThanOrEqualExpression) expr)
+        {
+            return getSortOfExpression(env, leExpr.lhs) == realSort
+                && getSortOfExpression(env, leExpr.rhs) == realSort;
+        }
+        if (auto geExpr = cast(GreaterThanOrEqualExpression) expr)
+        {
+            return getSortOfExpression(env, geExpr.lhs) == realSort
+                && getSortOfExpression(env, geExpr.rhs) == realSort;
         }
         return true;
     }
@@ -79,6 +101,25 @@ static class TypeChecker
             return env.getSort("Bool");
         }
         if (auto orExpr = cast(OrExpression) expr)
+        {
+            return env.getSort("Bool");
+        }
+        if (auto lExpr = cast(LessThanExpression) expr)
+        {
+            return env.getSort("Bool");
+        }
+
+        if (auto gExpr = cast(GreaterThanExpression) expr)
+        {
+            return env.getSort("Bool");
+        }
+
+        if (auto leExpr = cast(LessThanOrEqualExpression) expr)
+        {
+            return env.getSort("Bool");
+        }
+
+        if (auto geExpr = cast(GreaterThanOrEqualExpression) expr)
         {
             return env.getSort("Bool");
         }

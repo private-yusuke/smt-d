@@ -3,6 +3,7 @@ module smtd.type_environment;
 import smtd.expression;
 import std.string : format;
 
+/// 型環境
 class TypeEnvironment
 {
     /// 型環境の中にある sort（名前でインデックスが張られている）

@@ -1,6 +1,6 @@
 module smtd.expression;
 
-import smtd.app;
+import smtd.rational;
 import std.string;
 import std.range;
 import std.conv;
@@ -13,7 +13,9 @@ bool instanceOf(T)(Object obj)
 class Function
 {
 	string name;
+	/// 関数の第1引数、第2引数、…… の sort
 	Sort[] inTypes;
+	/// 関数の返り値の sort
 	Sort outType;
 
 	this(string name, Sort[] inTypes, Sort outType)
@@ -25,7 +27,6 @@ class Function
 
 	override string toString()
 	{
-		// return format("%s(%(%s, %) -> %s)", name, inTypes, outType);
 		return this.name;
 	}
 }
@@ -53,12 +54,12 @@ class Sort
 	}
 }
 
-// ソルバー内で扱われる形式
+/// ソルバー内で入力から起こされるような式すべての基底クラス
 class Expression
 {
 	override size_t toHash() @safe nothrow
 	{
-		return 0;
+		return typeid(this).name.hashOf();
 	}
 
 	override bool opEquals(Object other)
@@ -75,17 +76,27 @@ interface ExpressionWithString
 	string stringValue();
 }
 
+/// 空リストを表す式
 class EmptyExpression : Expression
 {
-	override size_t toHash() @safe nothrow
-	{
-		return 1;
-	}
 }
 
+unittest
+{
+	auto a = new Expression;
+	auto b = new EmptyExpression;
+
+	assert(a.hashOf() != b.hashOf());
+	assert(a.hashOf() == (new Expression).hashOf());
+	assert(b.hashOf() == (new EmptyExpression).hashOf());
+}
+
+/// 関数適用を表す式
 class FunctionExpression : Expression
 {
+	/// 適用する関数
 	Function applyingFunction;
+	/// 関数の第1引数、第2引数、…… となる式
 	Expression[] arguments;
 
 	this(Function applyingFunction)
@@ -114,7 +125,7 @@ class FunctionExpression : Expression
 		{
 			argumentsHash = arg.hashOf(argumentsHash);
 		}
-		return applyingFunction.hashOf(argumentsHash);
+		return applyingFunction.hashOf(argumentsHash.hashOf(typeid(this).name.hashOf()));
 	}
 
 	override bool opEquals(Object other)
@@ -124,6 +135,7 @@ class FunctionExpression : Expression
 	}
 }
 
+/// sort を表す式
 class SortExpression : Expression
 {
 	Sort sort;
@@ -140,6 +152,7 @@ class SortExpression : Expression
 	}
 }
 
+/// リストを表す式（空リストは EmptyExpression）
 class ListExpression : Expression
 {
 	Expression[] elements;
@@ -163,10 +176,11 @@ class ListExpression : Expression
 		{
 			hash = elem.hashOf(hash);
 		}
-		return hash;
+		return hash.hashOf(typeid(this).name.hashOf());
 	}
 }
 
+/// let 式内の変数束縛の部分を表す式
 class BindExpression : Expression
 {
 	SymbolExpression symbol;
@@ -184,6 +198,7 @@ class BindExpression : Expression
 	}
 }
 
+/// 既に定義された関数や sort を表すための symbol を表す式
 class SymbolExpression : Expression, ExpressionWithString
 {
 	string name;
@@ -205,7 +220,7 @@ class SymbolExpression : Expression, ExpressionWithString
 
 	override size_t toHash() @safe nothrow
 	{
-		return name.hashOf();
+		return name.hashOf(typeid(this).hashOf());
 	}
 
 	override int opCmp(Object other)
@@ -215,6 +230,7 @@ class SymbolExpression : Expression, ExpressionWithString
 	}
 }
 
+/// 予約語の式
 class KeywordExpression : Expression, ExpressionWithString
 {
 	string keyword;
@@ -231,10 +247,11 @@ class KeywordExpression : Expression, ExpressionWithString
 
 	override size_t toHash() @safe nothrow
 	{
-		return keyword.hashOf();
+		return keyword.hashOf(typeid(this).name.hashOf());
 	}
 }
 
+/// 整数値を表す式
 class IntegerExpression : Expression
 {
 	long value;
@@ -246,10 +263,27 @@ class IntegerExpression : Expression
 
 	override size_t toHash() @safe nothrow
 	{
-		return value.hashOf();
+		return value.hashOf(typeid(this).name.hashOf());
 	}
 }
 
+/// 有理数を表す式
+class RationalExpression(T) : Expression
+{
+	Rational!T value;
+
+	this(Rational!T value)
+	{
+		this.value = value;
+	}
+
+	override size_t toHash() @safe nothrow
+	{
+		return value.hashOf(typeid(this).name.hashOf());
+	}
+}
+
+/// 浮動小数点数を表す式
 class FloatExpression : Expression
 {
 	float value;
@@ -261,12 +295,14 @@ class FloatExpression : Expression
 
 	override size_t toHash() @safe nothrow
 	{
-		return value.hashOf();
+		return value.hashOf(typeid(this).name.hashOf());
 	}
 }
 
+/// 文字列を表す式
 class StringExpression : Expression, ExpressionWithString
 {
+	/// 入力されたときにどのように与えられた文字列であるか
 	enum InputType
 	{
 		DOUBLEQUOTED,
@@ -290,10 +326,11 @@ class StringExpression : Expression, ExpressionWithString
 
 	override size_t toHash() @safe nothrow
 	{
-		return value.hashOf(inputType.hashOf());
+		return value.hashOf(inputType.hashOf(typeid(this).name.hashOf()));
 	}
 }
 
+/// 単一の引数のみ持つような関数呼び出しに見えて、その関数が予約語であった場合を表す式
 class UnaryOpExpression : Expression
 {
 	Expression child;
@@ -305,10 +342,11 @@ class UnaryOpExpression : Expression
 
 	override size_t toHash() @safe nothrow
 	{
-		return child.hashOf() + 1;
+		return child.hashOf(typeid(this).name.hashOf());
 	}
 }
 
+/// 予約語 not を使った場合を表す式
 class NotExpression : UnaryOpExpression
 {
 	this(Expression child)
@@ -321,12 +359,9 @@ class NotExpression : UnaryOpExpression
 		return format("~(%s)", this.child);
 	}
 
-	override size_t toHash() @safe nothrow
-	{
-		return child.hashOf() + 2;
-	}
 }
 
+/// 2つの引数のみ持つような関数呼び出しに見えて、その関数が予約語であった場合を表す式
 class BinaryOpExpression : Expression
 {
 	Expression lhs, rhs;
@@ -339,11 +374,16 @@ class BinaryOpExpression : Expression
 
 	override size_t toHash() @safe nothrow
 	{
-		return lhs.hashOf(rhs.hashOf());
+		return lhs.hashOf(rhs.hashOf(typeid(this).name.hashOf()));
 	}
 }
 
-/// 与えられた引数の位置が交換可能なアリティ2の演算子を表すデータ構造
+/**
+ * 与えられた引数の位置が交換可能なアリティ2の演算子を表す式（=, and, or など）
+ * このような式を特別に考えたくなるのは、= や and, or の引数の順序は実際のところ真偽に関係しないので、
+ * (= x y) を (= y x) といつでも同等に考えたいという需要があるため
+ * そのため、hash 値を用いて (= x y) または (= y x) のどちらかが一方の式に自動的に書き変わるようにしたい
+ */
 class CommutativeBinaryOpExpression : BinaryOpExpression
 {
 	this(Expression lhs, Expression rhs)
@@ -359,6 +399,7 @@ class CommutativeBinaryOpExpression : BinaryOpExpression
 	}
 }
 
+/// (and lhs rhs) を表す式
 class AndExpression : CommutativeBinaryOpExpression
 {
 	this(Expression lhs, Expression rhs)
@@ -371,12 +412,9 @@ class AndExpression : CommutativeBinaryOpExpression
 		return format("(%s and %s)", lhs, rhs);
 	}
 
-	override size_t toHash() @safe nothrow
-	{
-		return lhs.hashOf(rhs.hashOf()) + 1;
-	}
 }
 
+/// (or lhs rhs) を表す式
 class OrExpression : CommutativeBinaryOpExpression
 {
 	this(Expression lhs, Expression rhs)
@@ -389,12 +427,9 @@ class OrExpression : CommutativeBinaryOpExpression
 		return format("(%s or %s)", lhs, rhs);
 	}
 
-	override size_t toHash() @safe nothrow
-	{
-		return lhs.hashOf(rhs.hashOf()) + 2;
-	}
 }
 
+/// (= lhs rhs) を表す式
 class EqualExpression : CommutativeBinaryOpExpression
 {
 	this(Expression lhs, Expression rhs)
@@ -402,13 +437,184 @@ class EqualExpression : CommutativeBinaryOpExpression
 		super(lhs, rhs);
 	}
 
-	override size_t toHash() @safe nothrow
-	{
-		return lhs.hashOf(rhs.hashOf()) + 2;
-	}
-
 	override string toString()
 	{
 		return format("%s = %s", lhs.toString(), rhs.toString());
 	}
+}
+
+unittest
+{
+	auto a = new AndExpression(new Expression, new Expression);
+	auto b = new OrExpression(new Expression, new Expression);
+
+	assert(a.hashOf() != b.hashOf());
+	assert(a.hashOf() == (new AndExpression(new Expression, new Expression)).hashOf());
+	assert(b.hashOf() == (new OrExpression(new Expression, new Expression)).hashOf());
+}
+
+/// (+ lhs rhs) を表す式
+class AdditionExpression : CommutativeBinaryOpExpression
+{
+	this(Expression lhs, Expression rhs)
+	{
+		super(lhs, rhs);
+	}
+
+	override string toString()
+	{
+		return format("%s + %s", lhs.toString(), rhs.toString());
+	}
+}
+
+/// (- lhs rhs) を表す式
+class SubtractionExpression : BinaryOpExpression
+{
+	this(Expression lhs, Expression rhs)
+	{
+		super(lhs, rhs);
+	}
+
+	override string toString()
+	{
+		return format("%s - %s", lhs.toString(), rhs.toString());
+	}
+}
+
+/**
+ * (* lhs rhs) を表す式
+ * 理論によっては可換性がないかもしれない？
+ */
+class MultiplicationExpression : CommutativeBinaryOpExpression
+{
+	this(Expression lhs, Expression rhs)
+	{
+		super(lhs, rhs);
+	}
+
+	override string toString()
+	{
+		return format("%s * %s", lhs.toString(), rhs.toString());
+	}
+}
+
+/// (/ lhs rhs) を表す式
+class DivisionExpression : BinaryOpExpression
+{
+	this(Expression lhs, Expression rhs)
+	{
+		super(lhs, rhs);
+	}
+
+	override string toString()
+	{
+		return format("%s / %s", lhs.toString(), rhs.toString());
+	}
+}
+
+/// (< lhs rhs) を表す式
+class LessThanExpression : BinaryOpExpression
+{
+	this(Expression lhs, Expression rhs)
+	{
+		super(lhs, rhs);
+	}
+
+	override string toString()
+	{
+		return format("%s < %s", lhs.toString(), rhs.toString());
+	}
+}
+
+/// (> lhs rhs) を表す式
+class GreaterThanExpression : BinaryOpExpression
+{
+	this(Expression lhs, Expression rhs)
+	{
+		super(lhs, rhs);
+	}
+
+	override string toString()
+	{
+		return format("%s > %s", lhs.toString(), rhs.toString());
+	}
+
+	LessThanExpression toLessThanExpression()
+	{
+		return new LessThanExpression(rhs, lhs);
+	}
+}
+
+// OrExpression の形に変換できるようなもの
+interface OrExpressionConvertible
+{
+	OrExpression toOrExpression();
+}
+
+/// (<= lhs rhs) を表す式
+class LessThanOrEqualExpression : BinaryOpExpression, OrExpressionConvertible
+{
+	this(Expression lhs, Expression rhs)
+	{
+		super(lhs, rhs);
+	}
+
+	override string toString()
+	{
+		return format("%s <= %s", lhs.toString(), rhs.toString());
+	}
+
+	OrExpression toOrExpression()
+	{
+		return new OrExpression(new LessThanExpression(lhs, rhs), new EqualExpression(lhs, rhs));
+	}
+}
+
+/// (>= lhs rhs) を表す式
+class GreaterThanOrEqualExpression : BinaryOpExpression, OrExpressionConvertible
+{
+	this(Expression lhs, Expression rhs)
+	{
+		super(lhs, rhs);
+	}
+
+	override string toString()
+	{
+		return format("%s >= %s", lhs.toString(), rhs.toString());
+	}
+
+	OrExpression toOrExpression()
+	{
+		return new OrExpression(new GreaterThanExpression(lhs, rhs), new EqualExpression(lhs, rhs));
+	}
+
+	LessThanOrEqualExpression toLessThanOrEqualExpression()
+	{
+		return new LessThanOrEqualExpression(rhs, lhs);
+	}
+}
+
+unittest
+{
+	import smtd.rational;
+	import std.bigint : BigInt;
+
+	alias RE = RationalExpression!BigInt;
+	alias R = Rational!BigInt;
+
+	auto rExpr1 = new RE(new R(5));
+	auto rExpr2 = new RE(new R(3));
+
+	auto ltExpr = new LessThanExpression(rExpr1, rExpr2);
+	auto eExpr = new EqualExpression(rExpr1, rExpr2);
+	auto leExpr = new LessThanOrEqualExpression(rExpr1, rExpr2);
+
+	assert(leExpr.toOrExpression() == new OrExpression(ltExpr, eExpr));
+	assert(leExpr.toOrExpression() == new OrExpression(eExpr, ltExpr));
+
+	auto gtExpr = new GreaterThanExpression(rExpr1, rExpr2);
+	auto geExpr = new GreaterThanOrEqualExpression(rExpr1, rExpr2);
+
+	assert(geExpr.toOrExpression() == new OrExpression(gtExpr, eExpr));
+	assert(geExpr.toOrExpression() == new OrExpression(eExpr, gtExpr));
 }
