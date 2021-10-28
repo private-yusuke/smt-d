@@ -1,7 +1,12 @@
 module smtd.app;
 
 import smtd.smt_solver : SExpression, SMTSolver;
-import std.range : front;
+import std.stdio : stdin, File;
+import std.file : readText;
+import std.range : front, array, join;
+import std.getopt;
+import std.typecons : Yes;
+import std.conv : to;
 
 /// テスト用の入力
 const auto content = `(set-logic QF_UF)
@@ -18,14 +23,42 @@ test|)
 (check-sat)
 `;
 
-void main()
+struct CommandLineOptions
 {
+	string filePath;
+}
+
+int main(string[] args)
+{
+	CommandLineOptions options;
+	auto helpInformation = getopt(args, "file|f",
+			"path to SMT-LIB2 input file", &options.filePath);
+
+	if (helpInformation.helpWanted)
+	{
+		defaultGetoptPrinter("smt-d solves problems written in SMT-LIBv2 language.",
+				helpInformation.options);
+		return 1;
+	}
+
 	auto solver = new SMTSolver();
 
-	auto parseTree = SExpression(content);
-	foreach (sExpr; parseTree.children.front.children)
+	File file = options.filePath ? File(options.filePath) : stdin;
+	auto parsedTree = parseInput(file);
+	foreach (sExpr; parsedTree.children.front.children)
 	{
 		auto expr = solver.parseTree(sExpr);
 		solver.runExpression(expr);
 	}
+
+	return 0;
+}
+
+/**
+ * 与えられたファイルの内容を読み取り、Pegged で提供されているパーサーに入力を与えた結果を返します。
+ */
+auto parseInput(File f = stdin)
+{
+	string content = f.byLineCopy(Yes.keepTerminator).join.array.to!string;
+	return SExpression(content);
 }
