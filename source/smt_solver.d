@@ -49,6 +49,30 @@ SExpression:
 	WysiwygChar <- . / ' ' / '\t' / '\r\n' / '\n' / '\r'
 `.format(reservedWords.map!(s => `"` ~ s ~ `"`))));
 
+enum SMTSolverStatus
+{
+    SAT,
+    UNSAT,
+    UNKNOWN
+}
+
+SMTSolverStatus toSMTSolverStatus(string s)
+{
+    import std.string : toLower;
+
+    switch (s.toLower())
+    {
+    case "sat":
+        return SMTSolverStatus.SAT;
+    case "unsat":
+        return SMTSolverStatus.UNSAT;
+    case "unknown":
+        return SMTSolverStatus.UNKNOWN;
+    default:
+        throw new Exception("Unknown input: %s".format(s));
+    }
+}
+
 /// SMT Solver
 class SMTSolver
 {
@@ -59,7 +83,7 @@ class SMTSolver
 
     private SATBridge satBridge;
     private TheorySolver tSolver;
-    private TypeEnvironment env = new TypeEnvironment;
+    private SMTSolverStatus status;
 
     this()
     {
@@ -82,6 +106,7 @@ class SMTSolver
         }
 
         this.satBridge = new SATBridge(this.env);
+        this.status = SMTSolverStatus.UNKNOWN;
     }
 
     /**
@@ -265,7 +290,7 @@ class SMTSolver
             // SAT ソルバが解いた結果、UNSAT だったら諦める
             if (assignment == null)
             {
-                writeln("UNSAT by SAT Solver");
+                this.status = SMTSolverStatus.UNSAT;
                 break;
             }
 
@@ -294,6 +319,7 @@ class SMTSolver
             {
                 writeln("SAT by theory solver");
                 ok = true;
+                this.status = SMTSolverStatus.SAT;
                 break;
             }
 
