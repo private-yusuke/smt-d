@@ -81,6 +81,7 @@ class EmptyExpression : Expression
 {
 }
 
+@("Expression and EmptyExpression obtains hash values that only depends on the content")
 unittest
 {
 	auto a = new Expression;
@@ -443,6 +444,7 @@ class EqualExpression : CommutativeBinaryOpExpression
 	}
 }
 
+@("AndExpression and OrExpression obtains hash values that only depends on the content")
 unittest
 {
 	auto a = new AndExpression(new Expression, new Expression);
@@ -594,6 +596,7 @@ class GreaterThanOrEqualExpression : BinaryOpExpression, OrExpressionConvertible
 	}
 }
 
+@("Conversion from <=, >= to (< or =), (> or =)")
 unittest
 {
 	import smtd.rational;

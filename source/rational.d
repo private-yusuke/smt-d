@@ -164,6 +164,7 @@ class Rational(T) if (isIntegral!T || is(T : BigInt))
 }
 
 alias BigIntRational = Rational!BigInt;
+@("Rational with BigInt handles big numbers")
 unittest
 {
     auto r1 = new BigIntRational(3, 4);

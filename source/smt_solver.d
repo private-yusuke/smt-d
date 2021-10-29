@@ -607,6 +607,7 @@ class SMTSolver
     }
 }
 
+@("Check whether SMTSolver solves benchmark files appropriately")
 unittest
 {
     /**
@@ -662,7 +663,6 @@ unittest
             return;
     }
 
-    // getBenchmarkFiles().each!(file => checkForFile(file));
     foreach (file; getBenchmarkFiles())
     {
         file.name.writeln;

@@ -3,6 +3,18 @@
 		"public_yusuke"
 	],
 	"copyright": "Copyright © 2021, public_yusuke",
+	"configurations": [
+		{
+			"name": "executable",
+			"targetType": "executable"
+		},
+		{
+			"name": "unittest",
+			"dependencies": {
+				"silly": "~>1.1.1"
+			}
+		}
+	],
 	"dependencies": {
 		"pegged": "~>0.4.5",
 		"sat-d": "~>1.0.1"
