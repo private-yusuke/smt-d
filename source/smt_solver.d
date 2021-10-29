@@ -83,6 +83,7 @@ class SMTSolver
 
     private SATBridge satBridge;
     private TheorySolver tSolver;
+    private TypeEnvironment env;
     private SMTSolverStatus status;
 
     this()
@@ -93,6 +94,7 @@ class SMTSolver
     /// ソルバーを初期化します。
     void initialize()
     {
+        this.env = new TypeEnvironment;
         env.declareSort("Bool", 0);
         env.declareSort("Real", 0);
 
