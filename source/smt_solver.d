@@ -308,11 +308,12 @@ class SMTSolver
             // SAT ソルバが解いた結果、UNSAT だったら諦める
             if (assignment == null)
             {
+                // writeln("UNSAT by SAT Solver");
                 this.status = SMTSolverStatus.UNSAT;
                 break;
             }
 
-            assignment.writeln;
+            // assignment.writeln;
 
             auto trueConstraints = assignment.byPair
                 .filter!(p => p.value)
@@ -323,10 +324,10 @@ class SMTSolver
                 .map!(p => p.key)
                 .array;
 
-            writeln("===== trueConstraints =====");
-            trueConstraints.each!writeln;
-            writeln("===== falseConstraints =====");
-            falseConstraints.each!writeln;
+            // writeln("===== trueConstraints =====");
+            // trueConstraints.each!writeln;
+            // writeln("===== falseConstraints =====");
+            // falseConstraints.each!writeln;
 
             tSolver.setConstraints(trueConstraints, falseConstraints);
 
@@ -335,11 +336,13 @@ class SMTSolver
             // 理論ソルバで SAT だったら終了
             if (res.ok)
             {
-                writeln("SAT by theory solver");
+                // writeln("SAT by theory solver");
                 ok = true;
                 this.status = SMTSolverStatus.SAT;
                 break;
             }
+
+            // writeln("UNSAT by theory solver");
 
             // 制約からすぐに UNSAT が導かれてしまうとき
             if (res.newConstraints == [])
