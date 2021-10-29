@@ -297,7 +297,13 @@ class SMTSolver
                 break;
             }
 
-            writeln("UNSAT by theory solver");
+            // 制約からすぐに UNSAT が導かれてしまうとき
+            if (res.newConstraints == [])
+            {
+                ok = false;
+                this.status = SMTSolverStatus.UNSAT;
+                break;
+            }
 
             // 理論ソルバの結果を見て SATBridge に以降は偽としてほしい真偽の組合せを伝達する
             foreach (expr; res.newConstraints)
