@@ -79,7 +79,7 @@ class SMTSolver
     /// set-logic で与えられた、現在扱う理論
     string logic;
     /// set-info で与えられた補助的な情報
-    string[string] info;
+    private Expression[string] info;
 
     private SATBridge satBridge;
     private TheorySolver tSolver;
@@ -234,7 +234,7 @@ class SMTSolver
                 return setLogic(logicName);
             case "set-info":
                 string name = (cast(KeywordExpression) fexpr.arguments[0]).keyword;
-                string content = (cast(StringExpression) fexpr.arguments[1]).value;
+                Expression content = fexpr.arguments[1];
                 return setInfo(name, content);
             case "check-sat":
                 return checkSat();
@@ -271,10 +271,26 @@ class SMTSolver
     /**
 	 * ソルバーに伝達したい補助的な情報を設定します。
 	 */
-    bool setInfo(string keyword, string content)
+    bool setInfo(string keyword, Expression content)
     {
         this.info[keyword] = content;
         return true;
+    }
+
+    /**
+	 * ソルバーに伝達された補助的な情報を取得します。
+	 */
+    Expression getInfo(string keyword)
+    {
+        return this.info[keyword];
+    }
+
+    /**
+	 * 与えられた keyword に対応する、ソルバーに伝達された補助的な情報が存在するなら true を、そうでないなら false を返します。
+	 */
+    bool infoExists(string keyword)
+    {
+        return (keyword in this.info) != null;
     }
 
     /**
