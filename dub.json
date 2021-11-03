@@ -17,7 +17,7 @@
 	],
 	"dependencies": {
 		"pegged": "~>0.4.5",
-		"sat-d": "~>1.0.1"
+		"sat-d": "~>1.0.2"
 	},
 	"description": "A small SMT solver implementation",
 	"license": "MIT",
