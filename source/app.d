@@ -1,7 +1,7 @@
 module smtd.app;
 
 import smtd.smt_solver : SExpression, SMTSolver;
-import std.stdio : stdin, File;
+import std.stdio : stdin, writeln, File;
 import std.file : readText;
 import std.range : front, array, join;
 import std.getopt;
@@ -34,7 +34,6 @@ version (unittest)
 }
 else
 {
-
 	int main(string[] args)
 	{
 		CommandLineOptions options;
@@ -58,6 +57,7 @@ else
 			solver.runExpression(expr);
 		}
 
+		solver.getStatusString().writeln;
 		return 0;
 	}
 
