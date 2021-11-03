@@ -132,8 +132,27 @@ class FunctionExpression : Expression
 	override bool opEquals(Object other)
 	{
 		FunctionExpression fExpr = cast(FunctionExpression) other;
-		return fExpr && applyingFunction == fExpr.applyingFunction && arguments == fExpr.arguments;
+		return fExpr && this.applyingFunction == fExpr.applyingFunction
+			&& this.arguments == fExpr.arguments;
 	}
+}
+
+@("FunctionExpression obtains hash values that only depends on the content")
+unittest
+{
+	auto sortA = new Sort("A", 0);
+	auto sortB = new Sort("B", 0);
+
+	auto funcA = new Function("a", [], sortA);
+	auto funcB = new Function("b", [], sortB);
+	auto a = new FunctionExpression(funcA);
+	auto b = new FunctionExpression(funcB);
+
+	assert(a.hashOf() != b.hashOf());
+	assert(a == new FunctionExpression(funcA));
+	assert(b == new FunctionExpression(funcB));
+	assert(a.hashOf() == (new FunctionExpression(funcA)).hashOf());
+	assert(b.hashOf() == (new FunctionExpression(funcB)).hashOf());
 }
 
 /// sort を表す式
@@ -149,7 +168,7 @@ class SortExpression : Expression
 	override bool opEquals(Object other)
 	{
 		auto sExpr = cast(SortExpression) other;
-		return sExpr && sort == sExpr.sort;
+		return sExpr && this.sort == sExpr.sort;
 	}
 }
 
@@ -178,6 +197,12 @@ class ListExpression : Expression
 			hash = elem.hashOf(hash);
 		}
 		return hash.hashOf(typeid(this).name.hashOf());
+	}
+
+	override bool opEquals(Object other)
+	{
+		auto lExpr = cast(ListExpression) other;
+		return lExpr && this.elements == lExpr.elements;
 	}
 }
 
@@ -221,14 +246,36 @@ class SymbolExpression : Expression, ExpressionWithString
 
 	override size_t toHash() @safe nothrow
 	{
-		return name.hashOf(typeid(this).hashOf());
+		return name.hashOf(typeid(this).name.hashOf());
 	}
 
-	override int opCmp(Object other)
+	override bool opEquals(Object other)
 	{
 		auto sExpr = cast(SymbolExpression) other;
-		return sExpr && name == sExpr.name;
+		return sExpr && this.name == sExpr.name;
 	}
+}
+
+@("SymbolExpression is capable of determining equality")
+unittest
+{
+	auto a = new SymbolExpression("a");
+	auto b = new SymbolExpression("b");
+
+	assert(a == new SymbolExpression("a"));
+	assert(b == new SymbolExpression("b"));
+	assert(a != b);
+}
+
+@("SymbolExpression obtains hash values that only depends on the content")
+unittest
+{
+	auto a = new SymbolExpression("a");
+	auto b = new SymbolExpression("b");
+
+	assert(a.hashOf() == (new SymbolExpression("a")).hashOf());
+	assert(b.hashOf() == (new SymbolExpression("b")).hashOf());
+	assert(a.hashOf() != b.hashOf());
 }
 
 /// 予約語の式
@@ -250,6 +297,12 @@ class KeywordExpression : Expression, ExpressionWithString
 	{
 		return keyword.hashOf(typeid(this).name.hashOf());
 	}
+
+	override bool opEquals(Object other)
+	{
+		auto kExpr = cast(KeywordExpression) other;
+		return kExpr && this.keyword == kExpr.keyword;
+	}
 }
 
 /// 整数値を表す式
@@ -265,6 +318,12 @@ class IntegerExpression : Expression
 	override size_t toHash() @safe nothrow
 	{
 		return value.hashOf(typeid(this).name.hashOf());
+	}
+
+	override bool opEquals(Object other)
+	{
+		auto iExpr = cast(IntegerExpression) other;
+		return iExpr && this.value == iExpr.value;
 	}
 }
 
@@ -282,6 +341,12 @@ class RationalExpression(T) : Expression
 	{
 		return value.hashOf(typeid(this).name.hashOf());
 	}
+
+	override bool opEquals(Object other)
+	{
+		auto rExpr = cast(RationalExpression) other;
+		return rExpr && this.value == rExpr.value;
+	}
 }
 
 /// 浮動小数点数を表す式
@@ -297,6 +362,12 @@ class FloatExpression : Expression
 	override size_t toHash() @safe nothrow
 	{
 		return value.hashOf(typeid(this).name.hashOf());
+	}
+
+	override bool opEquals(Object other)
+	{
+		auto fExpr = cast(FloatExpression) other;
+		return fExpr && this.value == fExpr.value;
 	}
 }
 
@@ -329,6 +400,12 @@ class StringExpression : Expression, ExpressionWithString
 	{
 		return value.hashOf(inputType.hashOf(typeid(this).name.hashOf()));
 	}
+
+	override bool opEquals(Object other)
+	{
+		auto sExpr = cast(StringExpression) other;
+		return sExpr && this.value == sExpr.value && this.inputType == sExpr.inputType;
+	}
 }
 
 /// 単一の引数のみ持つような関数呼び出しに見えて、その関数が予約語であった場合を表す式
@@ -345,6 +422,12 @@ class UnaryOpExpression : Expression
 	{
 		return child.hashOf(typeid(this).name.hashOf());
 	}
+
+	override bool opEquals(Object other)
+	{
+		auto uExpr = cast(UnaryOpExpression) other;
+		return uExpr && this.child == uExpr.child;
+	}
 }
 
 /// 予約語 not を使った場合を表す式
@@ -360,6 +443,11 @@ class NotExpression : UnaryOpExpression
 		return format("~(%s)", this.child);
 	}
 
+	override bool opEquals(Object other)
+	{
+		auto nExpr = cast(NotExpression) other;
+		return nExpr && this.child == nExpr.child;
+	}
 }
 
 /// 2つの引数のみ持つような関数呼び出しに見えて、その関数が予約語であった場合を表す式
@@ -376,6 +464,12 @@ class BinaryOpExpression : Expression
 	override size_t toHash() @safe nothrow
 	{
 		return lhs.hashOf(rhs.hashOf(typeid(this).name.hashOf()));
+	}
+
+	override bool opEquals(Object other)
+	{
+		auto bExpr = cast(BinaryOpExpression) other;
+		return bExpr && this.lhs == bExpr.lhs && this.rhs == bExpr.rhs;
 	}
 }
 
@@ -398,36 +492,85 @@ class CommutativeBinaryOpExpression : BinaryOpExpression
 			super(rhs, lhs);
 		}
 	}
+
+	override bool opEquals(Object other)
+	{
+		auto cExpr = cast(CommutativeBinaryOpExpression) other;
+		return cExpr && this.lhs == cExpr.lhs && this.rhs == cExpr.rhs;
+	}
+}
+
+/**
+ * 引数が可変長な予約済みの関数を表す式
+ */
+class VariadicArgumentsFunctionExpression : Expression
+{
+	Expression[] arguments;
+
+	this(Expression[] arguments)
+	{
+		this.arguments = arguments;
+	}
+
+	override size_t toHash() @safe nothrow
+	{
+		import std.algorithm : reduce;
+
+		size_t hash = 0;
+		foreach (expr; this.arguments)
+		{
+			hash = expr.hashOf(hash);
+		}
+		return typeid(this).name.hashOf(hash);
+	}
+
+	override bool opEquals(Object other)
+	{
+		auto cExpr = cast(VariadicArgumentsFunctionExpression) other;
+		return cExpr && this.arguments == cExpr.arguments;
+	}
+}
+
+/**
+ * 引数が可変長で交換可能な予約済みの関数を表す式
+ */
+class CommutativeVariadicArgumentsFunctionExpression : VariadicArgumentsFunctionExpression
+{
+	this(Expression[] arguments)
+	{
+		import std.algorithm : sort;
+		import std.range : array;
+
+		super(arguments.sort!((a, b) => a.hashOf() < b.hashOf()).array);
+	}
 }
 
 /// (and lhs rhs) を表す式
-class AndExpression : CommutativeBinaryOpExpression
+class AndExpression : CommutativeVariadicArgumentsFunctionExpression
 {
-	this(Expression lhs, Expression rhs)
+	this(Expression[] arguments)
 	{
-		super(lhs, rhs);
+		super(arguments);
 	}
 
 	override string toString()
 	{
-		return format("(%s and %s)", lhs, rhs);
+		return format("%-(%s && %)", this.arguments);
 	}
-
 }
 
 /// (or lhs rhs) を表す式
-class OrExpression : CommutativeBinaryOpExpression
+class OrExpression : CommutativeVariadicArgumentsFunctionExpression
 {
-	this(Expression lhs, Expression rhs)
+	this(Expression[] arguments)
 	{
-		super(lhs, rhs);
+		super(arguments);
 	}
 
 	override string toString()
 	{
-		return format("(%s or %s)", lhs, rhs);
+		return format("%-(%s || %)", this.arguments);
 	}
-
 }
 
 /// (= lhs rhs) を表す式
@@ -442,17 +585,44 @@ class EqualExpression : CommutativeBinaryOpExpression
 	{
 		return format("%s = %s", lhs.toString(), rhs.toString());
 	}
+
+	override size_t toHash() @safe nothrow
+	{
+		return lhs.hashOf(rhs.hashOf(typeid(this).name.hashOf()));
+	}
+}
+
+@("EqualExpression obtains hash values that only depends on the content")
+unittest
+{
+	auto a = new EqualExpression(new SymbolExpression("x"), new SymbolExpression("y"));
+	assert(a.hashOf() == (new EqualExpression(new SymbolExpression("x"),
+			new SymbolExpression("y"))).hashOf());
+	assert(a.hashOf() != (new EqualExpression(new SymbolExpression("x"),
+			new SymbolExpression("z"))).hashOf());
+}
+
+@("EqualExpression with swapped expressions are considered as the same")
+unittest
+{
+	auto a = new EqualExpression(new SymbolExpression("x"), new SymbolExpression("y"));
+	auto b = new EqualExpression(new SymbolExpression("y"), new SymbolExpression("x"));
+	auto c = new EqualExpression(new SymbolExpression("z"), new SymbolExpression("x"));
+	assert(a == b);
+	assert(a != c);
+	assert(b != c);
+	assert(a.hashOf() == b.hashOf());
 }
 
 @("AndExpression and OrExpression obtains hash values that only depends on the content")
 unittest
 {
-	auto a = new AndExpression(new Expression, new Expression);
-	auto b = new OrExpression(new Expression, new Expression);
+	auto a = new AndExpression([new Expression, new Expression]);
+	auto b = new OrExpression([new Expression, new Expression]);
 
 	assert(a.hashOf() != b.hashOf());
-	assert(a.hashOf() == (new AndExpression(new Expression, new Expression)).hashOf());
-	assert(b.hashOf() == (new OrExpression(new Expression, new Expression)).hashOf());
+	assert(a.hashOf() == (new AndExpression([new Expression, new Expression])).hashOf());
+	assert(b.hashOf() == (new OrExpression([new Expression, new Expression])).hashOf());
 }
 
 /// (+ lhs rhs) を表す式
@@ -568,7 +738,9 @@ class LessThanOrEqualExpression : BinaryOpExpression, OrExpressionConvertible
 
 	OrExpression toOrExpression()
 	{
-		return new OrExpression(new LessThanExpression(lhs, rhs), new EqualExpression(lhs, rhs));
+		return new OrExpression([
+				new LessThanExpression(lhs, rhs), new EqualExpression(lhs, rhs)
+				]);
 	}
 }
 
@@ -587,7 +759,9 @@ class GreaterThanOrEqualExpression : BinaryOpExpression, OrExpressionConvertible
 
 	OrExpression toOrExpression()
 	{
-		return new OrExpression(new GreaterThanExpression(lhs, rhs), new EqualExpression(lhs, rhs));
+		return new OrExpression([
+				new GreaterThanExpression(lhs, rhs), new EqualExpression(lhs, rhs)
+				]);
 	}
 
 	LessThanOrEqualExpression toLessThanOrEqualExpression()
@@ -612,12 +786,12 @@ unittest
 	auto eExpr = new EqualExpression(rExpr1, rExpr2);
 	auto leExpr = new LessThanOrEqualExpression(rExpr1, rExpr2);
 
-	assert(leExpr.toOrExpression() == new OrExpression(ltExpr, eExpr));
-	assert(leExpr.toOrExpression() == new OrExpression(eExpr, ltExpr));
+	assert(leExpr.toOrExpression() == new OrExpression([ltExpr, eExpr]));
+	assert(leExpr.toOrExpression() == new OrExpression([eExpr, ltExpr]));
 
 	auto gtExpr = new GreaterThanExpression(rExpr1, rExpr2);
 	auto geExpr = new GreaterThanOrEqualExpression(rExpr1, rExpr2);
 
-	assert(geExpr.toOrExpression() == new OrExpression(gtExpr, eExpr));
-	assert(geExpr.toOrExpression() == new OrExpression(eExpr, gtExpr));
+	assert(geExpr.toOrExpression() == new OrExpression([gtExpr, eExpr]));
+	assert(geExpr.toOrExpression() == new OrExpression([eExpr, gtExpr]));
 }

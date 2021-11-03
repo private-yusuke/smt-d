@@ -97,4 +97,10 @@ class TypeEnvironment
         }
         throw new Exception("Function with name \"%s\" does not exist".format(name));
     }
+
+    override string toString()
+    {
+        return format("[env] sorts: %-(%s, %), functions: %-(%s, %)",
+                this.sorts.values, this.functions.values);
+    }
 }

@@ -129,7 +129,7 @@ private class CongruenceClosure
     Node[][Node] successors;
     Node[][Node] predecessors;
 
-    private UnionFind!long uf = new UnionFind!long(100);
+    private UnionFind!long uf;
 
     /// 式から頂点への対応
     private Node[Expression] exprToNode;
@@ -143,7 +143,7 @@ private class CongruenceClosure
 
     this()
     {
-        uf = new UnionFind!long(100);
+        uf = new UnionFind!long(10000000);
     }
 
     /**

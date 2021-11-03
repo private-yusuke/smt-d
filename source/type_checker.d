@@ -36,13 +36,11 @@ static class TypeChecker
         }
         if (auto andExpr = cast(AndExpression) expr)
         {
-            return getSortOfExpression(env, andExpr.lhs) == boolSort
-                && getSortOfExpression(env, andExpr.rhs) == boolSort;
+            return andExpr.arguments.all!(expr => getSortOfExpression(env, expr) == boolSort);
         }
         if (auto orExpr = cast(OrExpression) expr)
         {
-            return getSortOfExpression(env, orExpr.lhs) == boolSort
-                && getSortOfExpression(env, orExpr.rhs) == boolSort;
+            return orExpr.arguments.all!(expr => getSortOfExpression(env, expr) == boolSort);
         }
         if (auto lExpr = cast(LessThanExpression) expr)
         {

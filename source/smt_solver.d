@@ -29,13 +29,13 @@ const string[] reservedWords = [
 mixin(grammar(`
 SExpression:
 	Grammar < SExpr+
-	SExpr   <  ReservedWord / UnaryOp / Symbol / Keyword / Float / Integer / String / List
+	SExpr   <  UnaryOp / Symbol / Keyword / ReservedWord / Float / Integer / String / List
 	Integer <- '0' / [1-9][0-9]*
 	Float   <- ('0' / [1-9][0-9]*) '.' [0-9]*
 	String  < DoublequotedString / WysiwygString
 	DoublequotedString <~ :doublequote (!doublequote Char)* :doublequote
 	WysiwygString <~ :'|' (!'|' WysiwygChar)* :'|'
-	Symbol  <~ !ReservedWord [a-zA-Z_$\-][a-zA-Z0-9_$\-]*
+	Symbol  <~ [a-zA-Z_$\-][a-zA-Z0-9_$\-]*
 	Keyword  <~ :':' !ReservedWord [a-zA-Z_\-][a-zA-Z0-9_\-]*
 	List    <- '(' SExpr* ')'
 
@@ -109,6 +109,8 @@ class SMTSolver
 
         this.satBridge = new SATBridge(this.env);
         this.status = SMTSolverStatus.UNKNOWN;
+        this.tSolver = null;
+        this.logic = null;
     }
 
     /**
@@ -135,9 +137,9 @@ class SMTSolver
             case "=":
                 return new EqualExpression(statements[1], statements[2]);
             case "and":
-                return new AndExpression(statements[1], statements[2]);
+                return new AndExpression(statements[1 .. $]);
             case "or":
-                return new OrExpression(statements[1], statements[2]);
+                return new OrExpression(statements[1 .. $]);
             case "not":
                 return new NotExpression(statements[1]);
             case "+":
@@ -362,6 +364,24 @@ class SMTSolver
     }
 
     /**
+     * ソルバーの状態を文字列にして返します。
+     */
+    string getStatusString()
+    {
+        switch (this.status)
+        {
+        case SMTSolverStatus.SAT:
+            return "sat";
+        case SMTSolverStatus.UNSAT:
+            return "unsat";
+        case SMTSolverStatus.UNKNOWN:
+            return "unknown";
+        default:
+            assert(0);
+        }
+    }
+
+    /**
 	 * ソルバーを終了します。
 	 */
     bool exitSolver()
@@ -430,11 +450,11 @@ class SMTSolver
         }
         if (auto aExpr = cast(AndExpression) expr)
         {
-            return new AndExpression(_expandLet(bind, aExpr.lhs), _expandLet(bind, aExpr.rhs));
+            return new AndExpression(aExpr.arguments.map!(expr => _expandLet(bind, expr)).array);
         }
         if (auto oExpr = cast(OrExpression) expr)
         {
-            return new OrExpression(_expandLet(bind, oExpr.lhs), _expandLet(bind, oExpr.rhs));
+            return new OrExpression(oExpr.arguments.map!(expr => _expandLet(bind, expr)).array);
         }
         if (auto eExpr = cast(EqualExpression) expr)
         {
@@ -460,7 +480,7 @@ class SMTSolver
     {
         /// SAT ソルバーに渡した変数の名前から元の Expression への対応を保持
         private Expression[string] SATVarToExpr;
-        private CDCLSolver satSolver = new CDCLSolver();
+        private CDCLSolver satSolver;
         private TypeEnvironment env;
 
         private string[] strAssertions;
@@ -468,6 +488,8 @@ class SMTSolver
         this(TypeEnvironment env)
         {
             this.env = env;
+            this.satSolver = new CDCLSolver();
+            SATVarToExpr = null;
         }
 
         /**
@@ -546,7 +568,7 @@ class SMTSolver
             if (auto eqExpr = cast(EqualExpression) expr)
             {
                 // eq に入ったら、その中の木を hash として考えられるようにする
-                string varName = format("EQ%d", expr.toHash());
+                string varName = format("EQ%d", expr.hashOf());
                 if (!SATVarExists(varName))
                     registerSATVar(varName, eqExpr);
                 return varName;
@@ -557,20 +579,20 @@ class SMTSolver
             }
             if (auto andExpr = cast(AndExpression) expr)
             {
-                return format("(%s) /\\ (%s)", this.parseAssertion(andExpr.lhs),
-                        this.parseAssertion(andExpr.rhs));
+                return format("%-(%s /\\ %)", andExpr.arguments.map!(expr => format("(%s)",
+                        this.parseAssertion(expr))).array);
             }
             if (auto orExpr = cast(OrExpression) expr)
             {
-                return format("(%s) \\/ (%s)", this.parseAssertion(orExpr.lhs),
-                        this.parseAssertion(orExpr.rhs));
+                return format("%-(%s \\/ %)", orExpr.arguments.map!(expr => format("(%s)",
+                        this.parseAssertion(expr))).array);
             }
             if (auto fExpr = cast(FunctionExpression) expr)
             {
                 auto sort = TypeChecker.getSortOfExpression(env, fExpr);
                 if (sort == env.getSort("Bool"))
                 {
-                    string varName = format("BOOL%d", expr.toHash());
+                    string varName = format("BOOL%d", expr.hashOf());
                     if (!SATVarExists(varName))
                         registerSATVar(varName, fExpr);
                     return varName;
@@ -581,7 +603,7 @@ class SMTSolver
             }
             if (auto lExpr = cast(LessThanExpression) expr)
             {
-                string varName = format("LT%d", lExpr.toHash());
+                string varName = format("LT%d", lExpr.hashOf());
                 if (!SATVarExists(varName))
                     registerSATVar(varName, lExpr);
                 return varName;
@@ -624,9 +646,12 @@ unittest
      */
     auto getBenchmarkFiles()
     {
-        import std.file : dirEntries, SpanMode;
+        import std.file : dirEntries, SpanMode, getSize;
+        import std.algorithm : sort;
 
         return dirEntries("testcase", SpanMode.depth).filter!(f => f.name.endsWith(".smt2"))
+            .array
+            .sort!((a, b) => getSize(a.name) < getSize(b.name))
             .map!(f => File(f));
     }
 
@@ -649,13 +674,14 @@ unittest
                 .stringValue.toSMTSolverStatus();
             SMTSolverStatus actual = solver.status;
             if (actual != SMTSolverStatus.UNKNOWN)
+            {
                 assert(expected == actual, "Expected %s, but solved as %s".format(expected, actual));
+            }
             else
             {
                 import std.stdio : stderr;
 
-                stderr.writeln(
-                        "WARNING: solver's status was unknown for file %s, skipped".format(
+                writeln("WARNING: solver's status was unknown for file %s, skipped".format(
                         file.name));
             }
         }
