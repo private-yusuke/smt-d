@@ -23,13 +23,13 @@ import satd.tseytin : tseytinTransform, resultToOriginalVarsAssignment;
 const string[] reservedWords = [
     "set-option", "not", "and", "or", "declare-sort", "declare-fun",
     "declare-const", "assert", "not", "set-info", "set-logic", "check-sat",
-    "exit", "+", "-", "*", "/", "<=", ">=", "<", ">", "="
+    "exit", "+", "-", "*", "/", "=>", "<=", ">=", "<", ">", "="
 ];
 
 mixin(grammar(`
 SExpression:
 	Grammar < SExpr+
-	SExpr   <  UnaryOp / Symbol / Keyword / ReservedWord / Float / Integer / String / List
+	SExpr   <  Symbol / Keyword / ReservedWord / Float / Integer / String / List
 	Integer <- '0' / [1-9][0-9]*
 	Float   <- ('0' / [1-9][0-9]*) '.' [0-9]*
 	String  < DoublequotedString / WysiwygString
@@ -40,7 +40,6 @@ SExpression:
 	List    <- '(' SExpr* ')'
 
 	ReservedWord <  %-(%s / %)
-	UnaryOp < '='
 	Char    <~ backslash ( doublequote
 					  / quote
 					  / backslash
@@ -140,6 +139,8 @@ class SMTSolver
                 return new AndExpression(statements[1 .. $]);
             case "or":
                 return new OrExpression(statements[1 .. $]);
+            case "=>":
+                return new ImpliesExpression(statements[1], statements[2]);
             case "not":
                 return new NotExpression(statements[1]);
             case "+":
@@ -189,9 +190,8 @@ class SMTSolver
             return new FloatExpression(tree.matches.front.to!float);
         case "SExpression.Keyword":
             return new KeywordExpression(tree.matches.front);
-        case "SExpression.UnaryOp",
-                "SExpression.ReservedWord":
-                return new SymbolExpression(tree.matches.front);
+        case "SExpression.ReservedWord":
+            return new SymbolExpression(tree.matches.front);
         case "SExpression.String":
             return parseTree(tree.children[0]);
         case "SExpression.DoublequotedString":
@@ -456,6 +456,10 @@ class SMTSolver
         {
             return new OrExpression(oExpr.arguments.map!(expr => _expandLet(bind, expr)).array);
         }
+        if (auto iExpr = cast(ImpliesExpression) expr)
+        {
+            return new ImpliesExpression(_expandLet(bind, iExpr.lhs), _expandLet(bind, iExpr.rhs));
+        }
         if (auto eExpr = cast(EqualExpression) expr)
         {
             return new EqualExpression(_expandLet(bind, eExpr.lhs), _expandLet(bind, eExpr.rhs));
@@ -586,6 +590,11 @@ class SMTSolver
             {
                 return format("%-(%s \\/ %)", orExpr.arguments.map!(expr => format("(%s)",
                         this.parseAssertion(expr))).array);
+            }
+            if (auto iExpr = cast(ImpliesExpression) expr)
+            {
+                return format("(%s -> %s)", this.parseAssertion(iExpr.lhs),
+                        this.parseAssertion(iExpr.rhs));
             }
             if (auto fExpr = cast(FunctionExpression) expr)
             {

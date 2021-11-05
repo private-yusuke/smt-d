@@ -42,6 +42,11 @@ static class TypeChecker
         {
             return orExpr.arguments.all!(expr => getSortOfExpression(env, expr) == boolSort);
         }
+        if (auto iExpr = cast(ImpliesExpression) expr)
+        {
+            return getSortOfExpression(env, iExpr.lhs) == boolSort
+                && getSortOfExpression(env, iExpr.rhs) == boolSort;
+        }
         if (auto lExpr = cast(LessThanExpression) expr)
         {
             return getSortOfExpression(env, lExpr.lhs) == realSort
@@ -99,6 +104,10 @@ static class TypeChecker
             return env.getSort("Bool");
         }
         if (auto orExpr = cast(OrExpression) expr)
+        {
+            return env.getSort("Bool");
+        }
+        if (auto iExpr = cast(ImpliesExpression) expr)
         {
             return env.getSort("Bool");
         }

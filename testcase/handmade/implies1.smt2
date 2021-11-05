@@ -1,0 +1,5 @@
+(set-logic QF_UF)
+(set-info :status sat)
+(declare-fun a () Bool)
+(assert (=> a a))
+(check-sat)

@@ -573,6 +573,20 @@ class OrExpression : CommutativeVariadicArgumentsFunctionExpression
 	}
 }
 
+/// (=> lhs rhs) を表す式
+class ImpliesExpression : BinaryOpExpression
+{
+	this(Expression lhs, Expression rhs)
+	{
+		super(lhs, rhs);
+	}
+
+	override string toString()
+	{
+		return format("%s => %s", this.lhs, this.rhs);
+	}
+}
+
 /// (= lhs rhs) を表す式
 class EqualExpression : CommutativeBinaryOpExpression
 {
