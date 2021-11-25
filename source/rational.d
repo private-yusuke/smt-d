@@ -29,15 +29,6 @@ class Rational(T) if (isIntegral!T || is(T : BigInt))
         this.denominator = denominator / g;
     }
 
-    unittest
-    {
-        alias R = Rational!long;
-        assert(new R(1, 2) == new R(-1, -2));
-        assert(new R(-1, 2) == new R(1, -2));
-
-        assert(new R(100, 250) == new R(2, 5));
-    }
-
     /// Rational であるような型の値だけ与えて初期化
     this(R)(R value) if (is(const R == const Rational!T))
     {
@@ -53,38 +44,12 @@ class Rational(T) if (isIntegral!T || is(T : BigInt))
         this(value.to!T, 1.to!T);
     }
 
-    unittest
-    {
-        alias R = Rational!long;
-        alias B = Rational!BigInt;
-        assert(new R(2) == new R(2, 1));
-        assert(new B(2) == new B(2, 1));
-    }
-
-    unittest
-    {
-        alias R = Rational!BigInt;
-        const R a = new const R(1, 2);
-
-        assert(new R(a) == new R(1, 2));
-    }
-
     /// 別々の型の値を2つ与えて初期化
     this(R, S)(R numerator, S denominator)
     {
         import std.conv : to;
 
         this(numerator.to!T, denominator.to!T);
-    }
-
-    unittest
-    {
-        alias R = Rational!BigInt;
-
-        // initialization check (both argument can take values of different types)
-        assert(new R(1, 2) == new R(BigInt(1), 2));
-        assert(new R(1, 2) == new R(1, BigInt(2)));
-        assert(new R(1, 2) == new R(BigInt(1), BigInt(2)));
     }
 
     auto opBinary(string op, R)(const R rhs) const
@@ -203,32 +168,84 @@ class Rational(T) if (isIntegral!T || is(T : BigInt))
 
         return v1.opCmp(v2);
     }
-
-    unittest
-    {
-        auto r1 = new BigIntRational(2, 3);
-        auto r2 = new BigIntRational(3, 2);
-        assert(r1 < r2);
-        assert(r1 <= r2);
-        assert(!(r1 > r2));
-        assert(!(r1 >= r2));
-    }
-
-    unittest
-    {
-        auto r1 = new BigIntRational(200, 2);
-        auto r2 = new BigIntRational(100, 1);
-        assert(!(r1 < r2));
-        assert(r1 <= r2);
-        assert(!(r1 > r2));
-        assert(r1 >= r2);
-    }
 }
 
-alias BigIntRational = Rational!BigInt;
+@("Rational initializing with two arguments")
+unittest
+{
+    alias R = Rational!long;
+    assert(new R(1, 2) == new R(-1, -2));
+    assert(new R(-1, 2) == new R(1, -2));
+
+    assert(new R(100, 250) == new R(2, 5));
+}
+
+@("Rational initialization with two different type values")
+unittest
+{
+    alias R = Rational!BigInt;
+
+    // initialization check (both argument can take values of different types)
+    assert(new R(1, 2) == new R(BigInt(1), 2));
+    assert(new R(1, 2) == new R(1, BigInt(2)));
+    assert(new R(1, 2) == new R(BigInt(1), BigInt(2)));
+}
+
+@("Rational initializing with non-Ratinal one argument")
+unittest
+{
+    alias R = Rational!long;
+    alias B = Rational!BigInt;
+    assert(new R(2) == new R(2, 1));
+    assert(new B(2) == new B(2, 1));
+}
+
+@("Rational initializing with one Rational argument")
+unittest
+{
+    alias R = Rational!BigInt;
+    const R a = new const R(1, 2);
+
+    assert(new R(a) == new R(1, 2));
+}
+
+@("Rational opUnary")
+unittest
+{
+    Rational!BigInt a = new Rational!BigInt(2);
+    Rational!BigInt b = new Rational!BigInt(-2);
+
+    assert(+a == a);
+    assert(-a == b);
+}
+
+@("Rational opCmp")
+unittest
+{
+    auto r1 = new Rational!BigInt(2, 3);
+    auto r2 = new Rational!BigInt(3, 2);
+    assert(r1 < r2);
+    assert(r1 <= r2);
+    assert(!(r1 > r2));
+    assert(!(r1 >= r2));
+}
+
+@("Rational opCmp with big values")
+unittest
+{
+    auto r1 = new Rational!BigInt(200, 2);
+    auto r2 = new Rational!BigInt(100, 1);
+    assert(!(r1 < r2));
+    assert(r1 <= r2);
+    assert(!(r1 > r2));
+    assert(r1 >= r2);
+}
+
 @("Rational with BigInt handles big numbers")
 unittest
 {
+    alias BigIntRational = Rational!BigInt;
+
     auto r1 = new BigIntRational(3, 4);
     auto r2 = new BigIntRational(4, 3); // opEquals check
     assert(r1 == new BigIntRational(6, 8));
