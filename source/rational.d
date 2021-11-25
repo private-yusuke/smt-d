@@ -38,12 +38,19 @@ class Rational(T) if (isIntegral!T || is(T : BigInt))
         assert(new R(100, 250) == new R(2, 5));
     }
 
-    /// 分子だけ与えて初期化
-    this(R)(R numerator)
+    /// Rational であるような型の値だけ与えて初期化
+    this(R)(R value) if (is(const R == const Rational!T))
+    {
+        auto rational = cast(Rational!T) value;
+        this(rational.numerator, rational.denominator);
+    }
+
+    /// 分子の値だけ与えて初期化
+    this(R)(R value) if (!is(const R == const Rational!T))
     {
         import std.conv : to;
 
-        this(numerator.to!T, 1);
+        this(value.to!T, 1.to!T);
     }
 
     unittest
@@ -52,6 +59,14 @@ class Rational(T) if (isIntegral!T || is(T : BigInt))
         alias B = Rational!BigInt;
         assert(new R(2) == new R(2, 1));
         assert(new B(2) == new B(2, 1));
+    }
+
+    unittest
+    {
+        alias R = Rational!BigInt;
+        const R a = new const R(1, 2);
+
+        assert(new R(a) == new R(1, 2));
     }
 
     /// 別々の型の値を2つ与えて初期化
@@ -84,6 +99,53 @@ class Rational(T) if (isIntegral!T || is(T : BigInt))
             return divide(rhs);
         else
             static assert(0, "Operator " ~ op ~ " not implemented");
+    }
+
+    auto opOpAssign(string op, T)(Rational!T rhs)
+    {
+        T n, d;
+        switch (op)
+        {
+        case "+":
+            n = this.numerator * rhs.denominator + rhs.numerator * this.denominator;
+            d = this.denominator * rhs.denominator;
+            break;
+        case "-":
+            n = this.numerator * rhs.denominator + (-rhs.numerator) * this.denominator;
+            d = this.denominator * rhs.denominator;
+            break;
+        case "*":
+            n = this.numerator * rhs.numerator;
+            d = this.denominator * rhs.denominator;
+            break;
+        case "/":
+            n = this.numerator * rhs.denominator;
+            d = this.denominator * rhs.numerator;
+            break;
+        default:
+            assert(0);
+        }
+        if (d < 0)
+        {
+            n = -n;
+            d = -d;
+        }
+        this.numerator = n;
+        this.denominator = d;
+        return this;
+    }
+
+    auto opUnary(string op)() const
+    {
+        if (op == "+")
+        {
+            return this;
+        }
+        if (op == "-")
+        {
+            return new typeof(this)(-this.numerator, this.denominator);
+        }
+        assert(0);
     }
 
     /// 逆数を返します。
