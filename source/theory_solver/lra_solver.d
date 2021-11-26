@@ -239,22 +239,24 @@ class LRAPolynomial(T)
 
     private T multiplyPolynomial(this T, S)(S value)
     {
-        auto res = new typeof(this);
+        R[string] newTerms;
+
         foreach (varName, coefficient; this.terms)
         {
-            res.setCoefficient(varName, coefficient * value);
+            newTerms[varName] = new R(coefficient * value);
         }
-        return res;
+        return new T(newTerms);
     }
 
     private T dividePolynomial(this T, S)(S value)
     {
-        auto res = new typeof(this);
+        R[string] newTerms;
+
         foreach (varName, coefficient; this.terms)
         {
-            res.setCoefficient(varName, coefficient / value);
+            newTerms[varName] = new R(coefficient / value);
         }
-        return res;
+        return new T(newTerms);
     }
 
     /**
@@ -388,6 +390,52 @@ unittest
 
     assert(a - b == expected1);
     assert(b - a == expected2);
+}
+
+@("LRAPolynomial times Rational returns correct values")
+unittest
+{
+    import std.bigint;
+
+    alias R = Rational!BigInt;
+    alias L = LRAPolynomial!BigInt;
+
+    L a = new L([
+            "a": new R(2),
+            "b": new R(3),
+            "c": new R(4),
+        ]);
+
+    L expected = new L([
+        "a": new R(10),
+        "b": new R(15),
+        "c": new R(20),
+    ]);
+
+    assert(a * new R(5) == expected);
+}
+
+@("LRAPolynomial divided by Rational returns correct values")
+unittest
+{
+    import std.bigint;
+
+    alias R = Rational!BigInt;
+    alias L = LRAPolynomial!BigInt;
+
+    L a = new L([
+            "a": new R(2),
+            "b": new R(3),
+            "c": new R(4),
+        ]);
+
+    L expected = new L([
+        "a": new R(1, 2),
+        "b": new R(3, 4),
+        "c": new R(1),
+    ]);
+
+    assert(a / new R(4) == expected);
 }
 
 /**
