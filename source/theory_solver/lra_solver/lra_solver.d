@@ -32,6 +32,9 @@ class QF_LRA_Solver : TheorySolver
         super();
     }
 
+    // TODO: Expression から LRAPolynomial に変換する
+    // TODO: 前処理を書く（LRAPolynomial からスラック変数への mapping を用意する）
+    // TODO: SimplexSolver へ前処理された入力を渡して動かすようにする
     override void setConstraints(Expression[] trueConstraints, Expression[] falseConstraints)
     {
         super.setConstraints(trueConstraints, falseConstraints);
