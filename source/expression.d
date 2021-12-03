@@ -629,8 +629,12 @@ class ImpliesExpression : BinaryOpExpression
 	}
 }
 
+interface ExpressionConvertibleForLRA {
+	Expression toExpressionForLRA();
+}
+
 /// (= lhs rhs) を表す式
-class EqualExpression : CommutativeBinaryOpExpression
+class EqualExpression : CommutativeBinaryOpExpression, ExpressionConvertibleForLRA
 {
 	this(Expression lhs, Expression rhs)
 	{
@@ -645,6 +649,13 @@ class EqualExpression : CommutativeBinaryOpExpression
 	override size_t toHash() @safe nothrow
 	{
 		return lhs.hashOf(rhs.hashOf(typeid(this).name.hashOf()));
+	}
+
+	Expression toExpressionForLRA() {
+		return new AndExpression([
+			new LessThanOrEqualExpression(this.lhs, this.rhs),
+			new GreaterThanOrEqualExpression(this.lhs, this.rhs),
+		]);
 	}
 }
 
@@ -668,6 +679,23 @@ unittest
 	assert(a != c);
 	assert(b != c);
 	assert(a.hashOf() == b.hashOf());
+}
+
+@("EqualExpression implements ExpressionConvertibleForLRA")
+unittest
+{
+	auto x = new SymbolExpression("x");
+	auto y = new SymbolExpression("y");
+
+	// (= y x)
+	auto a = new EqualExpression(y, x);
+	// (and (<= y x) (>= y x))
+	auto b = new AndExpression([
+		new LessThanOrEqualExpression(y, x),
+		new GreaterThanOrEqualExpression(y, x),
+	]);
+
+	assert(a.toExpressionForLRA() == b);
 }
 
 @("AndExpression and OrExpression obtains hash values that only depends on the content")

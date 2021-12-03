@@ -65,3 +65,11 @@ struct TheorySolverResult
         this.newConstraints = newConstraints;
     }
 }
+
+/**
+ * 理論によって指定できる前処理用クラス
+ */
+interface TheorySolverPreprocessor {
+    /// 与えられた式を置換等によって前処理したものを返します。返す式は元のものでない可能性があります。
+    Expression preprocess(Expression expr);
+}

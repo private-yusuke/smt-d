@@ -82,6 +82,7 @@ class SMTSolver
 
     private SATBridge satBridge;
     private TheorySolver tSolver;
+    private TheorySolverPreprocessor tSolverPreprocessor;
     private TypeEnvironment env;
     private SMTSolverStatus status;
 
@@ -109,6 +110,7 @@ class SMTSolver
         this.satBridge = new SATBridge(this.env);
         this.status = SMTSolverStatus.UNKNOWN;
         this.tSolver = null;
+        this.tSolverPreprocessor = null;
         this.logic = null;
     }
 
@@ -257,6 +259,7 @@ class SMTSolver
     bool setLogic(string logic)
     {
         this.tSolver = getTheorySolver(logic);
+        this.tSolverPreprocessor = getTheorySolverPreprocessor(logic);
         this.logic = logic;
         return true;
     }
@@ -267,8 +270,22 @@ class SMTSolver
         {
         case "QF_UF":
             return new QF_UF_Solver();
+        case "QF_LRA":
+            import smtd.theory_solver.lra_solver;
+            return new QF_LRA_Solver();
         default:
             throw new Exception("Logic other than QF_UF is not yet supported: %s".format(logic));
+        }
+    }
+
+    private TheorySolverPreprocessor getTheorySolverPreprocessor(string logic) {
+        switch (logic)
+        {
+            case "QF_LRA":
+                import smtd.theory_solver.lra_solver.preprocessor;
+                return new LRAPreprocessor();
+            default:
+                return null;
         }
     }
 
@@ -397,7 +414,8 @@ class SMTSolver
     {
         if (TypeChecker.checkValidExpression(env, expr))
         {
-            satBridge.addAssertion(expr);
+            auto preprocessed = tSolverPreprocessor.preprocess(expr);
+            satBridge.addAssertion(preprocessed);
             return true;
         }
         else
