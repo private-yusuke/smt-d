@@ -414,8 +414,10 @@ class SMTSolver
     {
         if (TypeChecker.checkValidExpression(env, expr))
         {
-            auto preprocessed = tSolverPreprocessor.preprocess(expr);
-            satBridge.addAssertion(preprocessed);
+            if(tSolverPreprocessor !is null) {
+                expr = tSolverPreprocessor.preprocess(expr);
+            }
+            satBridge.addAssertion(expr);
             return true;
         }
         else
@@ -638,17 +640,26 @@ class SMTSolver
 
             if (auto gExpr = cast(GreaterThanExpression) expr)
             {
-                return parseAssertion(gExpr.toLessThanExpression());
+                string varName = format("GT%d", gExpr.hashOf());
+                if (!SATVarExists(varName))
+                    registerSATVar(varName, gExpr);
+                return varName;
             }
 
             if (auto leExpr = cast(LessThanOrEqualExpression) expr)
             {
-                return parseAssertion(leExpr.toOrExpression());
+                string varName = format("LTOE%d", leExpr.hashOf());
+                if (!SATVarExists(varName))
+                    registerSATVar(varName, leExpr);
+                return varName;
             }
 
             if (auto geExpr = cast(GreaterThanOrEqualExpression) expr)
             {
-                return parseAssertion(geExpr.toLessThanOrEqualExpression());
+                string varName = format("GTOE%d", geExpr.hashOf());
+                if (!SATVarExists(varName))
+                    registerSATVar(varName, geExpr);
+                return varName;
             }
             throw new Exception("Unknown statement while parsing assertion: %s (%s)".format(expr,
                     typeid(expr)));
