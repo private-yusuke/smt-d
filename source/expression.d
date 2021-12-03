@@ -305,12 +305,8 @@ class KeywordExpression : Expression, ExpressionWithString
 	}
 }
 
-interface ExpressionConvertibleToRational {
-	Rational!T toRational(T)();
-}
-
 /// 整数値を表す式
-class IntegerExpression : Expression, ExpressionConvertibleToRational
+class IntegerExpression : Expression
 {
 	long value;
 
@@ -358,7 +354,7 @@ class RationalExpression(T) : Expression
 }
 
 /// 浮動小数点数を表す式
-class FloatExpression : Expression, ExpressionConvertibleToRational
+class FloatExpression : Expression
 {
 	float value;
 
@@ -377,40 +373,6 @@ class FloatExpression : Expression, ExpressionConvertibleToRational
 		auto fExpr = cast(FloatExpression) other;
 		return fExpr && this.value == fExpr.value;
 	}
-
-	Rational!T toRational(T)() {
-		import std.math : pow, floor;
-
-		import std.stdio : writeln;
-
-		int k = 0;
-		while(k <= 64) {
-			float denominator = this.value * pow(10, k);
-			if(denominator == floor(denominator)) {
-				return new Rational!T(denominator.to!long.to!T, pow(10, k).to!long.to!T);
-			}
-			k++;
-		}
-		throw new Exception("Unable to convert float value %f to Rational".format(this.value));
-	}
-}
-
-@("Convertion from IntegerExpression to Rational")
-unittest {
-	import std.bigint : BigInt;
-
-	auto ie = new IntegerExpression(42);
-	assert(ie.toRational!BigInt == new Rational!BigInt(42));
-}
-
-@("Convertion from FloatExpression to Rational")
-unittest {
-	import std.bigint : BigInt;
-
-	auto ie = new FloatExpression(0.325);
-	import std.stdio : writeln;
-	ie.toRational!BigInt.writeln;
-	assert(ie.toRational!BigInt == new Rational!BigInt(13, 40));
 }
 
 /// 文字列を表す式

@@ -18,6 +18,9 @@ class LRAPolynomial(T)
     /// terms[x_i] = a_i
     R[string] terms;
 
+    /// 定数項を表すための特別な変数の名前（変数の値は1として扱ってください）
+    const enum CONSTANT_TERM_NAME = "__smt-d_constant_term";
+
     this()
     {
     }
@@ -29,11 +32,32 @@ class LRAPolynomial(T)
     }
 
     /**
+     * 定数項のみしか含まない場合は true を、そうでない場合は false を返します。
+     */
+    bool containsOnlyConstant() const {
+        return this.terms.keys == [CONSTANT_TERM_NAME];
+    }
+
+    /**
      * 与えられた変数名 varName の係数を設定します。
      */
     void setCoefficient(string varName, const R coefficient)
     {
         this.terms[varName] = new R(coefficient);
+    }
+
+    /**
+     * 与えられた変数名 varName に対応する係数が存在するなら true を、そうでないなら false を返します。
+     */
+    bool coefficientExists(string varName) {
+        return (varName in this.terms) !is null;
+    }
+
+    /**
+     * 与えられた変数名 varName に対応する係数を返します。
+     */
+    R getCoefficient(string varName) {
+        return this.terms[varName];
     }
 
     /**
@@ -50,6 +74,42 @@ class LRAPolynomial(T)
         {
             setCoefficient(varName, this.terms[varName] + coefficient);
         }
+    }
+
+    T plus(this T)(T rhs) {
+        foreach(varName, coefficient; rhs.terms) {
+            if(varName !in this.terms) {
+                this.terms[varName] = coefficient;
+            } else {
+                this.terms[varName] += coefficient;
+            }
+        }
+        return this;
+    }
+
+    T minus(this T)(T rhs) {
+        foreach(varName, coefficient; rhs.terms) {
+            if(varName !in this.terms) {
+                this.terms[varName] = coefficient.additiveInverse;
+            } else {
+                this.terms[varName] -= coefficient;
+            }
+        }
+        return this;
+    }
+
+    T times(this T)(R rational) {
+        foreach(varName, coefficient; this.terms) {
+            this.terms[varName] *= rational;
+        }
+        return this;
+    }
+
+    T dividedBy(this T)(R rational) {
+        foreach(varName, coefficient; this.terms) {
+            this.terms[varName] /= rational;
+        }
+        return this;
     }
 
     private T addPolynomial(this T)(T rhs)
@@ -183,6 +243,28 @@ unittest
     b.setCoefficient("c", new R(5));
 
     assert(a == b);
+}
+
+@("LRAPolynomial containsOnlyConstant")
+unittest
+{
+    import std.bigint;
+
+    alias R = Rational!BigInt;
+    alias L = LRAPolynomial!BigInt;
+
+    const string CONSTANT_TERM_NAME = L.CONSTANT_TERM_NAME;
+
+    L a = new L([
+        CONSTANT_TERM_NAME: new R(10),
+    ]);
+    L b = new L([
+        "x": new R(10),
+    ]);
+
+    assert(a.containsOnlyConstant());
+    assert(!b.containsOnlyConstant());
+    assert(!(a + b).containsOnlyConstant());
 }
 
 @("LRAPolynomial plus LRAPolynomial returns correct values")

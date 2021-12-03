@@ -95,8 +95,10 @@ class Rational(T) if (isIntegral!T || is(T : BigInt))
             n = -n;
             d = -d;
         }
-        this.numerator = n;
-        this.denominator = d;
+        
+        const T g = gcd(abs(n), d);
+        this.numerator = n / g;
+        this.denominator = d / g;
         return this;
     }
 
@@ -117,6 +119,11 @@ class Rational(T) if (isIntegral!T || is(T : BigInt))
     T reciprocal(this T)()
     {
         return new T(this.denominator, this.numerator);
+    }
+
+    /// 加法の逆元を返します。
+    T additiveInverse(this T) () {
+        return new T(-this.numerator, this.denominator);
     }
 
     private T add(this T)(T rhs)
@@ -261,4 +268,11 @@ unittest
     assert(r3 == new BigIntRational(1, 2));
     auto r4 = new BigIntRational(BigInt('9'.repeat(100).array), BigInt('7'.repeat(100).array));
     assert(r4 == new BigIntRational(9, 7));
+}
+
+@("Rational additionInverse")
+unittest {
+    auto r1 = new Rational!BigInt(3, 2);
+
+    assert(r1.additiveInverse == new Rational!BigInt(-3, 2));
 }
