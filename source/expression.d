@@ -382,12 +382,19 @@ class StringExpression : Expression, ExpressionWithString
 	enum InputType
 	{
 		DOUBLEQUOTED,
-		WYSIWYG
+		WYSIWYG,
+		GENERATED, // 内部で生成された Expression である
 	}
 
 	string value;
 
 	InputType inputType;
+
+	this(string value)
+	{
+		this.value = value;
+		this.inputType = InputType.GENERATED;
+	}
 
 	this(string value, InputType inputType)
 	{

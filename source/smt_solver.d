@@ -270,10 +270,10 @@ class SMTSolver
         switch (logic)
         {
         case "QF_UF":
-            return new QF_UF_Solver();
+            return new QF_UF_Solver(this);
         case "QF_LRA":
             import smtd.theory_solver.lra_solver;
-            return new QF_LRA_Solver();
+            return new QF_LRA_Solver(this);
         default:
             throw new Exception("Logic other than QF_UF is not yet supported: %s".format(logic));
         }

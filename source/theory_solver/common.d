@@ -1,6 +1,7 @@
 module smtd.theory_solver.common;
 
 import smtd.expression;
+import smtd.smt_solver : SMTSolver;
 
 /**
  * すべての理論ソルバの基底クラス
@@ -11,20 +12,24 @@ class TheorySolver
     private Expression[] trueConstraints;
     // SAT ソルバーによって偽が割り当てられた制約
     private Expression[] falseConstraints;
+    // 呼び出し元の SMT ソルバーのインスタンス
+    SMTSolver smtSolver;
 
     /**
      * SAT ソルバーで真偽が定まっている制約をそれぞれ与えて初期化します。
      */
-    this(Expression[] trueConstraints, Expression[] falseConstraints)
+    this(Expression[] trueConstraints, Expression[] falseConstraints, SMTSolver smtSolver)
     {
         setConstraints(trueConstraints, falseConstraints);
+        this.smtSolver = smtSolver;
     }
 
     /**
      * 制約を持たない状態で初期化します。
      */
-    this()
+    this(SMTSolver smtSolver)
     {
+        this.smtSolver = smtSolver;
     }
 
     /**

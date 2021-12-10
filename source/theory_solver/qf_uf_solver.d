@@ -1,6 +1,7 @@
 module smtd.theory_solver.qf_uf_solver;
 
 import smtd.theory_solver.common;
+import smtd.smt_solver : SMTSolver;
 import smtd.expression;
 import smtd.util.unionfind;
 import std.range : zip, array;
@@ -20,14 +21,14 @@ class QF_UF_Solver : TheorySolver
     // 不等号に関する制約
     private EqualExpression[] neqConstraints;
 
-    this(Expression[] trueConstraints, Expression[] falseConstraints)
+    this(Expression[] trueConstraints, Expression[] falseConstraints, SMTSolver smtSolver)
     {
-        super(trueConstraints, falseConstraints);
+        super(trueConstraints, falseConstraints, smtSolver);
     }
 
-    this()
+    this(SMTSolver smtSolver)
     {
-        super();
+        super(smtSolver);
     }
 
     override void setConstraints(Expression[] trueConstraints, Expression[] falseConstraints)
@@ -46,6 +47,33 @@ class QF_UF_Solver : TheorySolver
     override TheorySolverResult solve()
     {
         CongruenceClosure congruenceClosure = new CongruenceClosure;
+
+        import smtd.util.constants;
+
+        string getInfoString(string infoName) {
+            if (smtSolver.infoExists(infoName)) {
+                Expression expr = smtSolver.getInfo(infoName);
+                if(auto sExpr = cast(StringExpression) expr) {
+                    return sExpr.value;
+                }
+            }
+
+            return null;
+        }
+        
+        // Congruence Closure を表す DAG を生成することを指示されているとき
+        if (getInfoString(GENERATE_CONGRUENCE_CLOSURE_GRAPH_INFO) == "true") {
+            // Congruence Closure を表す DAG の生成先ディレクトリが SMT solver で保持されている場合は
+            // 出力先を CongruenceClosure のインスタンスに教える
+            if (string destination = getInfoString(CONGRUENCE_CLOSURE_GRAPH_DESTINATION_INFO)) {
+                congruenceClosure.graphsDestination = destination;
+            }
+
+            string inputFileName = getInfoString(INPUT_FILE_NAME_INFO);
+
+            import std.array : replace;
+            congruenceClosure.graphsDestination = format("%s-graphs", inputFileName.replace("/", "_"));
+        }
 
         // 等号に関する制約のうちに含まれている式を congruence closure の中に入れる
         foreach (expr; eqConstraints ~ neqConstraints)
@@ -139,6 +167,10 @@ private class CongruenceClosure
     Node[ulong] indexToNode;
     /// DAG の中に現れる頂点の数
     private ulong nodeCount = 0;
+    /// Congruence Closure Algorithm の内部状態を表現する DAG を記述した DOT 言語のファイルを生成する先
+    public string graphsDestination;
+    /// すでに生成されたグラフの個数
+    private ulong generatedGraphCount;
 
     this()
     {
@@ -248,6 +280,11 @@ private class CongruenceClosure
 
             addNode(fNode);
             exprToNode[expr] = fNode;
+
+            // グラフ生成先があるなら生成する
+            if (this.graphsDestination)
+                writeDOTFile();
+            
             return true;
         }
         else if (auto sExpr = cast(SymbolExpression) expr)
@@ -255,6 +292,11 @@ private class CongruenceClosure
             Node sNode = new Node(sExpr);
             addNode(sNode);
             exprToNode[expr] = sNode;
+
+            // グラフ生成先があるなら生成する
+            if (this.graphsDestination)
+                writeDOTFile();
+
             return true;
         }
         else
@@ -330,6 +372,27 @@ private class CongruenceClosure
         }
         res ~= "}\n";
         return res;
+    }
+
+    /**
+     * 呼び出された時点での DAG の状態を DOT 言語のファイルとして書き出します。
+     */
+    void writeDOTFile() {
+        import std.file : exists, isDir, mkdir, write;
+
+        string content = this.toDOT();
+        string dirName = format("%s", this.graphsDestination);
+        if (!dirName.exists) {
+            mkdir(dirName);
+        }
+        if (!dirName.isDir) {
+            throw new Exception("Graph destination %s is expected to be a directory, but it isn't.".format(dirName));
+        }
+
+        string filename = format("%s/%d.dot", dirName, this.generatedGraphCount);
+        write(filename, content);
+
+        this.generatedGraphCount++;
     }
 
     override string toString()

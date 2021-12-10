@@ -1,6 +1,7 @@
 module smtd.theory_solver.lra_solver.lra_solver;
 
 import smtd.theory_solver.common;
+import smtd.smt_solver : SMTSolver;
 import smtd.expression;
 import smtd.rational;
 import smtd.theory_solver.lra_solver.lra_polynomial;
@@ -22,14 +23,14 @@ class QF_LRA_Solver : TheorySolver
     /// 置いた項からスラック変数へのマッピング
     private Expression[Expression] termToSlackVar;
 
-    this(Expression[] trueConstraints, Expression[] falseConstraints)
+    this(Expression[] trueConstraints, Expression[] falseConstraints, SMTSolver smtSolver)
     {
-        super(trueConstraints, falseConstraints);
+        super(trueConstraints, falseConstraints, smtSolver);
     }
 
-    this()
+    this(SMTSolver smtSolver)
     {
-        super();
+        super(smtSolver);
     }
 
     // TODO: Expression から LRAPolynomial に変換する
