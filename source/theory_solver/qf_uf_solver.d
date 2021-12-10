@@ -71,7 +71,6 @@ class QF_UF_Solver : TheorySolver
             if (congruenceClosure.same(u, v))
             {
                 // UNSATISFIABLE
-                // TODO: reason を返すようにする
                 return TheorySolverResult(false, cast(Expression[])(u.reason.array ~ v.reason.array));
             }
         }

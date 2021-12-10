@@ -245,7 +245,8 @@ class SMTSolver
             case "check-sat":
                 return checkSat();
             case "exit":
-                return exitSolver();
+                exitSolver();
+                assert(0);
             default:
                 assert(0);
             }
@@ -401,10 +402,10 @@ class SMTSolver
     /**
 	 * ソルバーを終了します。
 	 */
-    bool exitSolver()
+    void exitSolver()
     {
-        // TODO: ソルバーが完全に入力まで handle するようになったらここで main 関数に戻って return 0; する
-        return true;
+        import core.stdc.stdlib : exit;
+        exit(0);
     }
 
     /**
@@ -533,9 +534,6 @@ class SMTSolver
             auto tmp = format("%-((%s) /\\ %))", strAssertions);
             auto tseytin = tseytinTransform(tmp);
 
-            // TODO: sat-d で、現在の状態を維持したまま複数回 tseytin の結果を受け取れるようにする
-            // そうしないといちいち new CDCLSolver(); でインスタンスを生成しなければ
-            // 複数回 assert と check-sat が走ったときに処理ができない
             satSolver = new CDCLSolver();
             satSolver.initialize(tseytin.parseResult);
             auto literals = satSolver.solve().peek!(Literal[]);
