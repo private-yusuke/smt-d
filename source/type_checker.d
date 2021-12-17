@@ -67,6 +67,22 @@ static class TypeChecker
             return getSortOfExpression(env, geExpr.lhs) == realSort
                 && getSortOfExpression(env, geExpr.rhs) == realSort;
         }
+        if (auto addExpr = cast(AdditionExpression) expr) {
+            return getSortOfExpression(env, addExpr.lhs) == realSort
+                && getSortOfExpression(env, addExpr.rhs) == realSort;
+        }
+        if (auto subExpr = cast(SubtractionExpression) expr) {
+            return getSortOfExpression(env, subExpr.lhs) == realSort
+                && getSortOfExpression(env, subExpr.rhs) == realSort;
+        }
+        if (auto multExpr = cast(MultiplicationExpression) expr) {
+            return getSortOfExpression(env, multExpr.lhs) == realSort
+                && getSortOfExpression(env, multExpr.rhs) == realSort;
+        }
+        if (auto divExpr = cast(DivisionExpression) expr) {
+            return getSortOfExpression(env, divExpr.lhs) == realSort
+                && getSortOfExpression(env, divExpr.rhs) == realSort;
+        }
         return true;
     }
 
@@ -129,6 +145,12 @@ static class TypeChecker
         if (auto geExpr = cast(GreaterThanOrEqualExpression) expr)
         {
             return env.getSort("Bool");
+        }
+        if (cast(AdditionExpression) expr ||
+            cast(SubtractionExpression) expr ||
+            cast(MultiplicationExpression) expr ||
+            cast(DivisionExpression) expr) {
+            return env.getSort("Real");
         }
 
         throw new Exception("Unknown expression %s: %s".format(typeid(expr), expr));

@@ -7,7 +7,7 @@ import smtd.rational;
 import smtd.theory_solver.lra_solver.lra_polynomial;
 import smtd.theory_solver.lra_solver.rational_with_infinity;
 import std.container : redBlackTree, RedBlackTree;
-import std.algorithm : map, filter;
+import std.algorithm : map, filter, each;
 import std.range : array;
 import std.bigint : BigInt;
 
@@ -21,7 +21,10 @@ class Inequality(T) {
     L lhs;
     /// 右辺
     L rhs;
-    /// このインスタンスを生成するために使用したオリジナルの式
+    /**
+     * このインスタンスを生成するために使用したオリジナルの Expression。
+     * UNSAT 時の原因を検出するために利用されるので、インスタンスが表現する不等式と必ずしも一致している訳ではない。
+     */
     Expression originalExpr;
 
     this(L lhs, L rhs, Expression originalExpr) {
@@ -201,13 +204,21 @@ class GEInequality(T) : Inequality!T {
  */
 class QF_LRA_Solver : TheorySolver
 {
-    /// 等号に関する制約
-    private Expression[] eqConstraints;
-    /// 不等号に関する制約
-    private Expression[] neqConstraints;
+    alias L = LRAPolynomial!BigInt;
+    alias R = Rational!BigInt;
 
     /// 置いた項からスラック変数へのマッピング
-    private Expression[LRAPolynomial!BigInt] termToSlackVar;
+    private string[L] termToSlackVar;
+
+    /// 今までに置かれたスラック変数の個数
+    private ulong slackVarNum = 0;
+
+    private string generateNewSlackVarName() {
+        import std.string : format;
+        string varName = format("_smtd_slack_var_%d", this.slackVarNum);
+        this.slackVarNum++;
+        return varName;
+    }
 
     this(Expression[] trueConstraints, Expression[] falseConstraints, SMTSolver smtSolver)
     {
@@ -226,8 +237,23 @@ class QF_LRA_Solver : TheorySolver
     {
         // 実数の線形算術に関する制約を抽出したものを保持
         // Bool 型の返り値を持つ関数など、LRA に関係ない制約はここでは扱わない
-        this.eqConstraints = trueConstraints.filter!doesExpressionMatterToLRA.array;
-        this.neqConstraints = falseConstraints.filter!doesExpressionMatterToLRA.array;
+        // SAT ソルバに成り立たないとされた制約については、LRA の世界で同値となるような制約に書き換え、それが成り立つものとして扱う
+        Inequality!BigInt[] constraints = trueConstraints.filter!doesExpressionMatterToLRA.map!(expr => toInequality!BigInt(expr)).array ~ falseConstraints.filter!doesExpressionMatterToLRA.map!(expr => toInequality!BigInt(negateLRAExpression(expr), expr)).array;
+        
+        // それぞれの不等号の変数を左辺に、定数を右辺に移項する
+        constraints.each!(constraint => constraint.gatherVariablesToLhs());
+
+        // スラック変数への対応を作成し、置換する
+        foreach (constraint; constraints) {
+            auto ptr = constraint.lhs in this.termToSlackVar;
+            if (ptr) {
+                constraint.lhs = new L([ *ptr: new R(1) ]);
+            } else {
+                string slackVarName = this.generateNewSlackVarName();
+                this.termToSlackVar[constraint.lhs] = slackVarName;
+                constraint.lhs = new L([ slackVarName: new R(1) ]);
+            }
+        }
     }
 
     override TheorySolverResult solve()
@@ -366,13 +392,20 @@ unittest {
 /**
  * 与えられた式を再帰的に探索し、LRAPolynomial の形式に変換します。
  */
-static auto toLRAPolynomial(T)(const Expression expr) {
+static auto toLRAPolynomial(T)(Expression expr) {
     alias L = LRAPolynomial!T;
 
     import std.string : format;
 
     if(auto symbol = cast(SymbolExpression) expr) {
         return new L([symbol.name: new Rational!T(1)]);
+    }
+    if(auto func = cast(FunctionExpression) expr) {
+        if (func.arguments.length > 0) {
+            import std.string : format;
+            throw new Exception("Function other than constant function is not yet supported: %s".format(func));
+        }
+        return new L([func.applyingFunction.name: new Rational!T(1)]);
     }
     if(auto iExpr = cast(IntegerExpression) expr) {
         return new L([L.CONSTANT_TERM_NAME: toRational!T(iExpr)]);
@@ -412,7 +445,7 @@ static auto toLRAPolynomial(T)(const Expression expr) {
         throw new Exception("Dividing a term with a term containing variable is not allowed: %s / %s".format(lhs, rhs));
     }
 
-    throw new Exception("This expression can not be converted to LRAPolynomial: %s".format(expr));
+    throw new Exception("This expression can not be converted to LRAPolynomial: %s (%s)".format(expr, typeid(expr)));
     assert(0);
 }
 
@@ -576,29 +609,37 @@ unittest {
  * 不等式を表す Expression を Inequality を継承したクラスのインスタンスに変換します。
  */
 static Inequality!T toInequality(T)(Expression expr) {
+    return toInequality!T(expr, expr);
+}
+
+/**
+ * 不等式を表す Expression を Inequality を継承したクラスのインスタンスに変換します。
+ * 第二引数が Inequality インスタンスの originalExpr フィールドとして設定されます。
+ */
+static Inequality!T toInequality(T)(Expression expr, Expression originalExpr) {
     if (auto gtExpr = cast(GreaterThanExpression) expr) {
         auto lhs = toLRAPolynomial!T(gtExpr.lhs);
         auto rhs = toLRAPolynomial!T(gtExpr.rhs);
 
-        return new GTInequality!T(lhs, rhs, expr);
+        return new GTInequality!T(lhs, rhs, originalExpr);
     }
     if (auto ltExpr = cast(LessThanExpression) expr) {
         auto lhs = toLRAPolynomial!T(ltExpr.lhs);
         auto rhs = toLRAPolynomial!T(ltExpr.rhs);
 
-        return new LTInequality!T(lhs, rhs, expr);
+        return new LTInequality!T(lhs, rhs, originalExpr);
     }
     if (auto geExpr = cast(GreaterThanOrEqualExpression) expr) {
         auto lhs = toLRAPolynomial!T(geExpr.lhs);
         auto rhs = toLRAPolynomial!T(geExpr.rhs);
 
-        return new GEInequality!T(lhs, rhs, expr);
+        return new GEInequality!T(lhs, rhs, originalExpr);
     }
     if (auto leExpr = cast(LessThanOrEqualExpression) expr) {
         auto lhs = toLRAPolynomial!T(leExpr.lhs);
         auto rhs = toLRAPolynomial!T(leExpr.rhs);
 
-        return new LEInequality!T(lhs, rhs, expr);
+        return new LEInequality!T(lhs, rhs, originalExpr);
     }
 
     import std.string : format;
