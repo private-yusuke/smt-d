@@ -271,6 +271,43 @@ class QF_LRA_Solver : TheorySolver
         Expression e = new LessThanOrEqualExpression(sa, sb);
         assert(doesExpressionMatterToLRA(e));
     }
+
+    /**
+     * 与えられた Expression を LRA の世界で否定した形式の Expression を返します。
+     */
+    private static Expression negateLRAExpression(Expression expr) {
+        if (auto gtExpr = cast(GreaterThanExpression) expr) {
+            return new LessThanOrEqualExpression(gtExpr.lhs, gtExpr.rhs);
+        }
+        if (auto ltExpr = cast(LessThanExpression) expr) {
+            return new GreaterThanOrEqualExpression(ltExpr.lhs, ltExpr.rhs);
+        }
+        if (auto geExpr = cast(GreaterThanOrEqualExpression) expr) {
+            return new LessThanExpression(geExpr.lhs, geExpr.rhs);
+        }
+        if (auto leExpr = cast(LessThanOrEqualExpression) expr) {
+            return new GreaterThanExpression(leExpr.lhs, leExpr.rhs);
+        }
+
+        import std.string : format;
+        throw new Exception("This expression is not representing inequality: %s".format(expr));
+    }
+
+    @("negateLRAExpression")
+    unittest {
+        auto sa = new SymbolExpression("a");
+        auto sb = new SymbolExpression("b");
+
+        auto lt = new LessThanExpression(sa, sb);
+        auto gt = new GreaterThanExpression(sa, sb);
+        auto le = new LessThanOrEqualExpression(sa, sb);
+        auto ge = new GreaterThanOrEqualExpression(sa, sb);
+
+        assert(negateLRAExpression(lt) == ge);
+        assert(negateLRAExpression(gt) == le);
+        assert(negateLRAExpression(le) == gt);
+        assert(negateLRAExpression(ge) == lt);
+    }
 }
 
 /**
