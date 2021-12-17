@@ -30,6 +30,109 @@ class Inequality(T) {
         this.originalExpr = originalExpr;
     }
 
+    /**
+     * 左辺に変数を、右辺に定数を集めます。
+     */
+    void gatherVariablesToLhs() {
+        // 左辺へ全てを移項
+        this.lhs.minus(this.rhs);
+
+        // 左辺に定数項があるなら、それを右辺に持ってくる
+        if(this.lhs.coefficientExists(L.CONSTANT_TERM_NAME)) {
+            auto coefficient = this.lhs.getCoefficient(L.CONSTANT_TERM_NAME);
+            // 左辺から定数項を消す
+            this.lhs.setCoefficient(L.CONSTANT_TERM_NAME, new Rational!T(0));
+
+            // 右辺に定数項を持ってくる
+            this.rhs = new L([
+                L.CONSTANT_TERM_NAME: coefficient.additiveInverse(),
+            ]);
+        } else {
+            this.rhs = new L([
+                L.CONSTANT_TERM_NAME: new Rational!T(0),
+            ]);
+        }
+    }
+
+    @("Inequality.gatherVariablesToLhs with no constant term")
+    unittest {
+        alias R = Rational!BigInt;
+        alias L = LRAPolynomial!BigInt;
+
+        auto sa = new SymbolExpression("a");
+        auto sb = new SymbolExpression("b");
+        auto sc = new SymbolExpression("c");
+        auto sd = new SymbolExpression("d");
+        auto se = new SymbolExpression("e");
+
+        auto b2 = new MultiplicationExpression(sb, new IntegerExpression(2));
+        auto c3 = new MultiplicationExpression(sc, new IntegerExpression(3));
+        auto c4 = new MultiplicationExpression(sc, new IntegerExpression(4));
+        auto d5 = new MultiplicationExpression(sd, new IntegerExpression(5));
+        auto e6 = new MultiplicationExpression(se, new IntegerExpression(6));
+
+        auto lhs = new AdditionExpression(sa, new AdditionExpression(b2, c3));
+        auto rhs = new AdditionExpression(c4, new AdditionExpression(d5, e6));
+        // a + 2b + 3c < 4c + 5d + 6e
+        auto lt = new LessThanExpression(lhs, rhs);
+
+        auto ineq = toInequality!BigInt(lt);
+
+        ineq.gatherVariablesToLhs();
+
+        // a + 2b - c - 5d - 6e < 0
+        auto expected = new LTInequality!BigInt(
+            new L([
+                "a": new R(1),
+                "b": new R(2),
+                "c": new R(-1),
+                "d": new R(-5),
+                "e": new R(-6),
+            ]),
+            new L([
+                L.CONSTANT_TERM_NAME: new R(0),
+            ]),
+            lt
+        );
+
+        assert(ineq == expected);
+    }
+
+    @("Inequality.gatherVariablesToLhs with constant term")
+    unittest {
+        alias R = Rational!BigInt;
+        alias L = LRAPolynomial!BigInt;
+
+        auto sa = new SymbolExpression("a");
+        auto sb = new SymbolExpression("b");
+
+        auto b2 = new MultiplicationExpression(sb, new IntegerExpression(2));
+
+        auto lhs = new AdditionExpression(sa, new IntegerExpression(2));
+        auto rhs = new AdditionExpression(b2, new IntegerExpression(5));
+        // a + 2 < 2b + 5
+        auto lt = new LessThanExpression(lhs, rhs);
+
+        auto ineq = toInequality!BigInt(lt);
+
+        ineq.gatherVariablesToLhs();
+
+        // a - 2b - 3 < 0
+        auto expected = new LTInequality!BigInt(
+            new L([
+                "a": new R(1),
+                "b": new R(-2),
+                L.CONSTANT_TERM_NAME: new R(-3),
+            ]),
+            new L([
+                L.CONSTANT_TERM_NAME: new R(0),
+            ]),
+            lt
+        );
+
+        assert(ineq == expected);
+    }
+
     override bool opEquals(Object other) const
     {
         auto o = cast(typeof(this)) other;
