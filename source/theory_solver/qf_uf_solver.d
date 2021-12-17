@@ -79,7 +79,9 @@ class QF_UF_Solver : TheorySolver
         foreach (expr; eqConstraints ~ neqConstraints)
         {
             congruenceClosure.registerExpression(expr.lhs);
+            congruenceClosure.writeDOTFile("register: %s (lhs of '%s')".format(expr.lhs, expr));
             congruenceClosure.registerExpression(expr.rhs);
+            congruenceClosure.writeDOTFile("register: %s (rhs of '%s')".format(expr.rhs, expr));
         }
 
         foreach (eqExpr; eqConstraints)
@@ -89,6 +91,7 @@ class QF_UF_Solver : TheorySolver
             u.reason.insert(eqExpr);
             v.reason.insert(eqExpr);
             congruenceClosure.merge(u, v);
+            congruenceClosure.writeDOTFile("merge: %s".format(eqExpr));
         }
 
         foreach (neqExpr; neqConstraints)
@@ -99,6 +102,7 @@ class QF_UF_Solver : TheorySolver
             if (congruenceClosure.same(u, v))
             {
                 // UNSATISFIABLE
+                congruenceClosure.writeDOTFile("expected %s != %s, but seems equal\n... UNSAT!".format(neqExpr.lhs, neqExpr.rhs));
                 return TheorySolverResult(false, cast(Expression[])(u.reason.array ~ v.reason.array));
             }
         }
@@ -153,7 +157,9 @@ private class CongruenceClosure
 {
     alias Node = CongruenceClosureNode;
 
+    /// Node -> （関数適用の引数の順番で順序付けされた子の配列）
     Node[][Node] successors;
+    /// Node -> （先に追加されたもの順で順序付けされた親の配列）
     Node[][Node] predecessors;
 
     private UnionFind!long uf;
@@ -280,10 +286,6 @@ private class CongruenceClosure
 
             addNode(fNode);
             exprToNode[expr] = fNode;
-
-            // グラフ生成先があるなら生成する
-            if (this.graphsDestination)
-                writeDOTFile();
             
             return true;
         }
@@ -292,10 +294,6 @@ private class CongruenceClosure
             Node sNode = new Node(sExpr);
             addNode(sNode);
             exprToNode[expr] = sNode;
-
-            // グラフ生成先があるなら生成する
-            if (this.graphsDestination)
-                writeDOTFile();
 
             return true;
         }
@@ -352,16 +350,19 @@ private class CongruenceClosure
         }
     }
 
-    string toDOT()
+    string toDOT(string comment)
     {
         import std.format : format;
 
         string res = "digraph congruenceclosure {\nnode[style=filled, fillcolor=white];\n";
         res ~= "graph [layout=dot];\n";
+        res ~= "ordering=\"out\"\n";
+        res ~= "labelloc=\"t\";\n";
+        if (comment) res ~= "label=\"%s\"\n".format(comment);
 
         foreach (index, node; indexToNode)
         {
-            res ~= format(`"%s" [label="%s, %s"];` ~ '\n', node.toHash(), node.label, root(node));
+            res ~= format(`"%s" [label=<%s, %s<BR /><FONT POINT-SIZE="10">%s</FONT>>];` ~ '\n', node.toHash(), node.label, root(node), node.expr);
         }
         foreach (from, tos; successors)
         {
@@ -377,10 +378,12 @@ private class CongruenceClosure
     /**
      * 呼び出された時点での DAG の状態を DOT 言語のファイルとして書き出します。
      */
-    void writeDOTFile() {
+    void writeDOTFile(string comment) {
         import std.file : exists, isDir, mkdir, write;
 
-        string content = this.toDOT();
+        if (!this.graphsDestination) return;
+
+        string content = this.toDOT(comment);
         string dirName = format("%s", this.graphsDestination);
         if (!dirName.exists) {
             mkdir(dirName);
