@@ -66,6 +66,12 @@ class Expression
 	{
 		return true;
 	}
+
+	@("Expression has the only one hash value")
+	unittest {
+		auto a = new Expression;
+		assert(a.hashOf() == (new Expression).hashOf());
+	}
 }
 
 /*
@@ -79,17 +85,20 @@ interface ExpressionWithString
 /// 空リストを表す式
 class EmptyExpression : Expression
 {
+	@("EmptyExpression has the only one hash value")
+	unittest {
+		auto a = new EmptyExpression;
+		assert(a.hashOf() == (new EmptyExpression).hashOf());
+	}
 }
 
-@("Expression and EmptyExpression obtains hash values that only depends on the content")
+@("Expression and EmptyExpression obtains different hash values where both has no content")
 unittest
 {
 	auto a = new Expression;
 	auto b = new EmptyExpression;
 
 	assert(a.hashOf() != b.hashOf());
-	assert(a.hashOf() == (new Expression).hashOf());
-	assert(b.hashOf() == (new EmptyExpression).hashOf());
 }
 
 /// 関数適用を表す式
@@ -135,41 +144,41 @@ class FunctionExpression : Expression
 		return fExpr && this.applyingFunction == fExpr.applyingFunction
 			&& this.arguments == fExpr.arguments;
 	}
-}
 
-@("FunctionExpression toString")
-unittest {
-	auto sortA = new Sort("A", 0);
+	@("FunctionExpression toString")
+	unittest {
+		auto sortA = new Sort("A", 0);
 
-	auto varA = new SymbolExpression("a");
-	auto varB = new SymbolExpression("b");
-	auto funcF = new Function("f", [sortA, sortA], sortA);
-	auto a = new FunctionExpression(funcF, [varA, varB]);
+		auto varA = new SymbolExpression("a");
+		auto varB = new SymbolExpression("b");
+		auto funcF = new Function("f", [sortA, sortA], sortA);
+		auto a = new FunctionExpression(funcF, [varA, varB]);
 
-	import std.stdio;
-	a.toString.writeln;
-	assert(a.toString == "f(a b)");
+		import std.stdio;
+		a.toString.writeln;
+		assert(a.toString == "f(a b)");
 
-	auto b = new FunctionExpression(funcF, [a, varB]);
-	assert(b.toString == "f(f(a b) b)");
-}
+		auto b = new FunctionExpression(funcF, [a, varB]);
+		assert(b.toString == "f(f(a b) b)");
+	}
 
-@("FunctionExpression obtains hash values that only depends on the content")
-unittest
-{
-	auto sortA = new Sort("A", 0);
-	auto sortB = new Sort("B", 0);
+	@("FunctionExpression obtains hash values that only depends on the content")
+	unittest
+	{
+		auto sortA = new Sort("A", 0);
+		auto sortB = new Sort("B", 0);
 
-	auto funcA = new Function("a", [], sortA);
-	auto funcB = new Function("b", [], sortB);
-	auto a = new FunctionExpression(funcA);
-	auto b = new FunctionExpression(funcB);
+		auto funcA = new Function("a", [], sortA);
+		auto funcB = new Function("b", [], sortB);
+		auto a = new FunctionExpression(funcA);
+		auto b = new FunctionExpression(funcB);
 
-	assert(a.hashOf() != b.hashOf());
-	assert(a == new FunctionExpression(funcA));
-	assert(b == new FunctionExpression(funcB));
-	assert(a.hashOf() == (new FunctionExpression(funcA)).hashOf());
-	assert(b.hashOf() == (new FunctionExpression(funcB)).hashOf());
+		assert(a.hashOf() != b.hashOf());
+		assert(a == new FunctionExpression(funcA));
+		assert(b == new FunctionExpression(funcB));
+		assert(a.hashOf() == (new FunctionExpression(funcA)).hashOf());
+		assert(b.hashOf() == (new FunctionExpression(funcB)).hashOf());
+	}
 }
 
 /// sort を表す式
@@ -271,28 +280,28 @@ class SymbolExpression : Expression, ExpressionWithString
 		auto sExpr = cast(SymbolExpression) other;
 		return sExpr && this.name == sExpr.name;
 	}
-}
 
-@("SymbolExpression is capable of determining equality")
-unittest
-{
-	auto a = new SymbolExpression("a");
-	auto b = new SymbolExpression("b");
+	@("SymbolExpression is capable of determining equality")
+	unittest
+	{
+		auto a = new SymbolExpression("a");
+		auto b = new SymbolExpression("b");
 
-	assert(a == new SymbolExpression("a"));
-	assert(b == new SymbolExpression("b"));
-	assert(a != b);
-}
+		assert(a == new SymbolExpression("a"));
+		assert(b == new SymbolExpression("b"));
+		assert(a != b);
+	}
 
-@("SymbolExpression obtains hash values that only depends on the content")
-unittest
-{
-	auto a = new SymbolExpression("a");
-	auto b = new SymbolExpression("b");
+	@("SymbolExpression obtains hash values that only depends on the content")
+	unittest
+	{
+		auto a = new SymbolExpression("a");
+		auto b = new SymbolExpression("b");
 
-	assert(a.hashOf() == (new SymbolExpression("a")).hashOf());
-	assert(b.hashOf() == (new SymbolExpression("b")).hashOf());
-	assert(a.hashOf() != b.hashOf());
+		assert(a.hashOf() == (new SymbolExpression("a")).hashOf());
+		assert(b.hashOf() == (new SymbolExpression("b")).hashOf());
+		assert(a.hashOf() != b.hashOf());
+	}
 }
 
 /// 予約語の式
@@ -585,6 +594,15 @@ class AndExpression : CommutativeVariadicArgumentsFunctionExpression
 	{
 		return format("%-(%s && %)", this.arguments);
 	}
+
+
+	@("AndExpression obtains hash values that only depends on the content")
+	unittest
+	{
+		auto a = new AndExpression([new Expression, new Expression]);
+
+		assert(a.hashOf() == (new AndExpression([new Expression, new Expression])).hashOf());
+	}
 }
 
 /// (or lhs rhs) を表す式
@@ -599,6 +617,23 @@ class OrExpression : CommutativeVariadicArgumentsFunctionExpression
 	{
 		return format("%-(%s || %)", this.arguments);
 	}
+
+	@("OrExpression obtains hash values that only depends on the content")
+	unittest
+	{
+		auto a = new OrExpression([new Expression, new Expression]);
+
+		assert(a.hashOf() == (new OrExpression([new Expression, new Expression])).hashOf());
+	}
+}
+
+@("AndExpression and OrExpression obtains different hash values with the same content")
+unittest
+{
+	auto a = new AndExpression([new Expression, new Expression]);
+	auto b = new OrExpression([new Expression, new Expression]);
+
+	assert(a.hashOf() != b.hashOf());
 }
 
 /// (=> lhs rhs) を表す式
@@ -643,56 +678,45 @@ class EqualExpression : CommutativeBinaryOpExpression, ExpressionConvertibleForL
 			new GreaterThanOrEqualExpression(this.lhs, this.rhs),
 		]);
 	}
-}
 
-@("EqualExpression obtains hash values that only depends on the content")
-unittest
-{
-	auto a = new EqualExpression(new SymbolExpression("x"), new SymbolExpression("y"));
-	assert(a.hashOf() == (new EqualExpression(new SymbolExpression("x"),
-			new SymbolExpression("y"))).hashOf());
-	assert(a.hashOf() != (new EqualExpression(new SymbolExpression("x"),
-			new SymbolExpression("z"))).hashOf());
-}
+	@("EqualExpression obtains hash values that only depends on the content")
+	unittest
+	{
+		auto a = new EqualExpression(new SymbolExpression("x"), new SymbolExpression("y"));
+		assert(a.hashOf() == (new EqualExpression(new SymbolExpression("x"),
+				new SymbolExpression("y"))).hashOf());
+		assert(a.hashOf() != (new EqualExpression(new SymbolExpression("x"),
+				new SymbolExpression("z"))).hashOf());
+	}
 
-@("EqualExpression with swapped expressions are considered as the same")
-unittest
-{
-	auto a = new EqualExpression(new SymbolExpression("x"), new SymbolExpression("y"));
-	auto b = new EqualExpression(new SymbolExpression("y"), new SymbolExpression("x"));
-	auto c = new EqualExpression(new SymbolExpression("z"), new SymbolExpression("x"));
-	assert(a == b);
-	assert(a != c);
-	assert(b != c);
-	assert(a.hashOf() == b.hashOf());
-}
+	@("EqualExpression with swapped expressions are considered as the same")
+	unittest
+	{
+		auto a = new EqualExpression(new SymbolExpression("x"), new SymbolExpression("y"));
+		auto b = new EqualExpression(new SymbolExpression("y"), new SymbolExpression("x"));
+		auto c = new EqualExpression(new SymbolExpression("z"), new SymbolExpression("x"));
+		assert(a == b);
+		assert(a != c);
+		assert(b != c);
+		assert(a.hashOf() == b.hashOf());
+	}
 
-@("EqualExpression implements ExpressionConvertibleForLRA")
-unittest
-{
-	auto x = new SymbolExpression("x");
-	auto y = new SymbolExpression("y");
+	@("EqualExpression implements ExpressionConvertibleForLRA")
+	unittest
+	{
+		auto x = new SymbolExpression("x");
+		auto y = new SymbolExpression("y");
 
-	// (= y x)
-	auto a = new EqualExpression(y, x);
-	// (and (<= y x) (>= y x))
-	auto b = new AndExpression([
-		new LessThanOrEqualExpression(y, x),
-		new GreaterThanOrEqualExpression(y, x),
-	]);
+		// (= y x)
+		auto a = new EqualExpression(y, x);
+		// (and (<= y x) (>= y x))
+		auto b = new AndExpression([
+			new LessThanOrEqualExpression(y, x),
+			new GreaterThanOrEqualExpression(y, x),
+		]);
 
-	assert(a.toExpressionForLRA() == b);
-}
-
-@("AndExpression and OrExpression obtains hash values that only depends on the content")
-unittest
-{
-	auto a = new AndExpression([new Expression, new Expression]);
-	auto b = new OrExpression([new Expression, new Expression]);
-
-	assert(a.hashOf() != b.hashOf());
-	assert(a.hashOf() == (new AndExpression([new Expression, new Expression])).hashOf());
-	assert(b.hashOf() == (new OrExpression([new Expression, new Expression])).hashOf());
+		assert(a.toExpressionForLRA() == b);
+	}
 }
 
 /// (+ lhs rhs) を表す式
