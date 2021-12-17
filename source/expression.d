@@ -352,6 +352,10 @@ class IntegerExpression : Expression
 		return iExpr && this.value == iExpr.value;
 	}
 
+	override string toString() {
+		return format("%d", this.value);
+	}
+
 	Rational!T toRational(T)() {
 		return new Rational!T(this.value.to!T);
 	}
@@ -392,6 +396,10 @@ class FloatExpression : Expression
 	override size_t toHash() @safe nothrow
 	{
 		return value.hashOf(typeid(this).name.hashOf());
+	}
+
+	override string toString() {
+		return format("%f", this.value);
 	}
 
 	override bool opEquals(Object other)
@@ -729,7 +737,7 @@ class AdditionExpression : CommutativeBinaryOpExpression
 
 	override string toString()
 	{
-		return format("%s + %s", lhs.toString(), rhs.toString());
+		return format("(%s) + (%s)", lhs.toString(), rhs.toString());
 	}
 }
 
@@ -743,7 +751,7 @@ class SubtractionExpression : BinaryOpExpression
 
 	override string toString()
 	{
-		return format("%s - %s", lhs.toString(), rhs.toString());
+		return format("(%s) - (%s)", lhs.toString(), rhs.toString());
 	}
 }
 
@@ -760,7 +768,7 @@ class MultiplicationExpression : CommutativeBinaryOpExpression
 
 	override string toString()
 	{
-		return format("%s * %s", lhs.toString(), rhs.toString());
+		return format("(%s) * (%s)", lhs.toString(), rhs.toString());
 	}
 }
 
@@ -774,7 +782,7 @@ class DivisionExpression : BinaryOpExpression
 
 	override string toString()
 	{
-		return format("%s / %s", lhs.toString(), rhs.toString());
+		return format("(%s) / (%s)", lhs.toString(), rhs.toString());
 	}
 }
 
