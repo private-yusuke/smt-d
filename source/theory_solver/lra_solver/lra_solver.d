@@ -88,6 +88,11 @@ class QF_LRA_Solver : TheorySolver
     }
 }
 
+/**
+ * 与えられた Expression を有理数の形式に変換します。
+ * IntegerExpression または FloatExpression のみ許容されます。
+ * それ以外の Expression が与えられた場合には例外が発生します。
+ */
 static Rational!T toRational(T)(Expression expr) {
     import std.string : format;
 
@@ -130,6 +135,15 @@ unittest {
 	assert(toRational!BigInt(ie) == new Rational!BigInt(13, 40));
 }
 
+@("Conversion from unsupported expression to Rational throws Expression")
+unittest {
+    import std.exception : assertThrown;
+    assertThrown(toRational!BigInt(new SymbolExpression("a")));
+}
+
+/**
+ * 与えられた式を再帰的に探索し、LRAPolynomial の形式に変換します。
+ */
 static auto toLRAPolynomial(T)(const Expression expr) {
     alias L = LRAPolynomial!T;
 
@@ -180,7 +194,7 @@ static auto toLRAPolynomial(T)(const Expression expr) {
     assert(0);
 }
 
-@("ExpressionToLRAPolynomialConverter toLRAPolynomial AdditionExpression")
+@("toLRAPolynomial AdditionExpression")
 unittest {
     import std.bigint : BigInt;
 
@@ -197,7 +211,7 @@ unittest {
     assert(toLRAPolynomial!BigInt(a) == new L(["x": new R(1), CONSTANT_TERM_NAME: new R(10)]));
 }
 
-@("ExpressionToLRAPolynomialConverter toLRAPolynomial SubtractionExpression")
+@("toLRAPolynomial SubtractionExpression")
 unittest {
     import std.bigint : BigInt;
 
@@ -214,7 +228,7 @@ unittest {
     assert(toLRAPolynomial!BigInt(a) == new L(["x": new R(1), CONSTANT_TERM_NAME: new R(-10)]));
 }
 
-@("ExpressionToLRAPolynomialConverter toLRAPolynomial MultiplicationExpression")
+@("toLRAPolynomial MultiplicationExpression")
 unittest {
     import std.bigint : BigInt;
 
@@ -249,7 +263,7 @@ unittest {
     assertThrown(toLRAPolynomial!BigInt(d));
 }
 
-@("ExpressionToLRAPolynomialConverter toLRAPolynomial DivisionExpression")
+@("toLRAPolynomial DivisionExpression")
 unittest {
     import std.bigint : BigInt;
     import std.exception : assertThrown;
@@ -282,6 +296,58 @@ unittest {
         new SymbolExpression("x")
     );
     assertThrown(toLRAPolynomial!BigInt(d));
+}
+
+@("toLRAPolynomial with complicated expression")
+unittest {
+    import std.bigint : BigInt;
+    import std.exception : assertThrown;
+
+    alias R = Rational!BigInt;
+    alias L = LRAPolynomial!BigInt;
+
+    const string CONSTANT_TERM_NAME = L.CONSTANT_TERM_NAME;
+
+    auto as = new SymbolExpression("a");
+    auto bs = new SymbolExpression("b");
+
+    auto i2 = new IntegerExpression(2);
+    auto i3 = new IntegerExpression(3);
+
+    auto a2 = new MultiplicationExpression(i2, as);
+    auto b3 = new MultiplicationExpression(bs, i3);
+
+    // 2a + 3b
+    auto plus1 = new AdditionExpression(a2, b3);
+
+    // 3(2a + 3b)
+    auto mult1 = new MultiplicationExpression(i3, plus1);
+
+    // 3 - 3(2a + 3b)
+    auto minus1 = new SubtractionExpression(i3, mult1);
+
+    // 3 - 6a - 9b
+    L expected1 = new L([
+        CONSTANT_TERM_NAME: new R(3),
+        "a": new R(-6),
+        "b": new R(-9),
+    ]);
+
+    assert(toLRAPolynomial!BigInt(minus1) == expected1);
+
+    // (3 - 6a - 9b) / 2 = 3/2 - 3a - 9/2b
+    auto div1 = new DivisionExpression(minus1, i2);
+    // (3/2 - 3a - 9/2b) / 3 = 1/2 - a - 3/2b
+    auto div2 = new DivisionExpression(div1, i3);
+
+    // 1/2 - a - 3/2b
+    L expected2 = new L([
+        CONSTANT_TERM_NAME: new R(1, 2),
+        "a": new R(-1),
+        "b": new R(-3, 2),
+    ]);
+
+    assert(toLRAPolynomial!BigInt(div2) == expected2);
 }
 
 /**
