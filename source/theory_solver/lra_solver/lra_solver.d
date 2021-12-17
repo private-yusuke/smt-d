@@ -9,6 +9,7 @@ import smtd.theory_solver.lra_solver.rational_with_infinity;
 import std.container : redBlackTree, RedBlackTree;
 import std.algorithm : map, filter;
 import std.range : array;
+import std.bigint : BigInt;
 
 /**
  * 実数の線形算術に関する理論のソルバ
@@ -21,7 +22,7 @@ class QF_LRA_Solver : TheorySolver
     private Expression[] neqConstraints;
 
     /// 置いた項からスラック変数へのマッピング
-    private Expression[Expression] termToSlackVar;
+    private Expression[LRAPolynomial!BigInt] termToSlackVar;
 
     this(Expression[] trueConstraints, Expression[] falseConstraints, SMTSolver smtSolver)
     {
@@ -38,9 +39,10 @@ class QF_LRA_Solver : TheorySolver
     // TODO: SimplexSolver へ前処理された入力を渡して動かすようにする
     override void setConstraints(Expression[] trueConstraints, Expression[] falseConstraints)
     {
-        // TODO: 実数の線形算術に関する制約を抽出したものを保持する
-        this.eqConstraints = trueConstraints.filter!(c => c).array;
-        this.neqConstraints = falseConstraints.filter!(c => c).array;
+        // 実数の線形算術に関する制約を抽出したものを保持
+        // Bool 型の返り値を持つ関数など、LRA に関係ない制約はここでは扱わない
+        this.eqConstraints = trueConstraints.filter!doesExpressionMatterToLRA.array;
+        this.neqConstraints = falseConstraints.filter!doesExpressionMatterToLRA.array;
     }
 
     override TheorySolverResult solve()
@@ -48,6 +50,41 @@ class QF_LRA_Solver : TheorySolver
         import std.string : format;
 
         assert(0, "You must implement `solve()` for this theory solver: %s".format(typeid(this)));
+    }
+
+    /**
+    * 与えられた Expression が LRA Solver で扱うべきものなら true を、そうでないなら false を返します。
+    */
+    private static bool doesExpressionMatterToLRA(Expression expr) {
+        return cast(GreaterThanExpression) expr ||
+                cast(LessThanExpression) expr ||
+                cast(GreaterThanOrEqualExpression) expr ||
+                cast(LessThanOrEqualExpression) expr;
+    }
+    @("QF_LRA_Solver.doesExpressionMatterToLRA")
+    unittest {
+        SymbolExpression sa = new SymbolExpression("a");
+        SymbolExpression sb = new SymbolExpression("b");
+
+        // (= a b)
+        Expression a = new EqualExpression(sa, sb);
+        assert(!doesExpressionMatterToLRA(a));
+
+        // (> a b)
+        Expression b = new GreaterThanExpression(sa, sb);
+        assert(doesExpressionMatterToLRA(b));
+
+        // (< a b)
+        Expression c = new LessThanExpression(sa, sb);
+        assert(doesExpressionMatterToLRA(c));
+
+        // (>= a b)
+        Expression d = new GreaterThanOrEqualExpression(sa, sb);
+        assert(doesExpressionMatterToLRA(d));
+
+        // (<= a b)
+        Expression e = new LessThanOrEqualExpression(sa, sb);
+        assert(doesExpressionMatterToLRA(e));
     }
 }
 

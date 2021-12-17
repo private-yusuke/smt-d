@@ -214,6 +214,11 @@ class LRAPolynomial(T)
         return rhs && this.terms == rhs.terms;
     }
 
+	override size_t toHash() @safe
+	{
+		return this.terms.hashOf();
+	}
+
     override string toString() const
     {
         import std.string : format;
@@ -381,4 +386,43 @@ unittest
     ]);
 
     assert(a / new R(4) == expected);
+}
+
+@("LRAPolynomial hashOf")
+unittest
+{
+    import std.bigint;
+
+    alias R = Rational!BigInt;
+    alias L = LRAPolynomial!BigInt;
+
+    L a = new L([
+            "a": new R(2),
+            "b": new R(3),
+            "c": new R(4),
+        ]);
+    L b = new L([
+            "a": new R(2),
+            "b": new R(3),
+            "c": new R(4),
+        ]);
+    assert(a.hashOf() == b.hashOf());
+
+    L c = new L([
+            "b": new R(3),
+            "c": new R(4),
+            "a": new R(2),
+        ]);
+
+    assert(c.hashOf() == b.hashOf());
+
+    L d = new L([
+            "a": new R(2),
+        ]);
+    d.addCoefficient("b", new R(3));
+    assert(c.hashOf() != d.hashOf());
+    
+    d.addCoefficient("c", new R(4));
+
+    assert(c.hashOf() == d.hashOf());
 }
