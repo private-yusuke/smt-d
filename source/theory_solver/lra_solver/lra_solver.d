@@ -12,6 +12,88 @@ import std.range : array;
 import std.bigint : BigInt;
 
 /**
+ * LRA ソルバ内で不等式を表すためのデータ構造
+ */
+class Inequality(T) {
+    alias L = LRAPolynomial!T;
+
+    /// 左辺
+    L lhs;
+    /// 右辺
+    L rhs;
+    /// このインスタンスを生成するために使用したオリジナルの式
+    Expression originalExpr;
+
+    this(L lhs, L rhs, Expression originalExpr) {
+        this.lhs = lhs;
+        this.rhs = rhs;
+        this.originalExpr = originalExpr;
+    }
+
+    override bool opEquals(Object other) const
+    {
+        auto o = cast(typeof(this)) other;
+        return o && this.lhs == o.lhs && this.rhs == o.rhs && this.originalExpr == o.originalExpr;
+    }
+}
+
+/**
+ * LRA ソルバ内で lhs > rhs を表すためのデータ構造
+ */
+class GTInequality(T) : Inequality!T {
+    this(L lhs, L rhs, Expression originalExpr) {
+        super(lhs, rhs, originalExpr);
+    }
+
+    override string toString() {
+        import std.string : format;
+        return format("%s > %s", this.lhs, this.rhs);
+    }
+}
+
+/**
+ * LRA ソルバ内で lhs < rhs を表すためのデータ構造
+ */
+class LTInequality(T) : Inequality!T {
+    this(L lhs, L rhs, Expression originalExpr) {
+        super(lhs, rhs, originalExpr);
+    }
+
+    override string toString() {
+        import std.string : format;
+        return format("%s < %s", this.lhs, this.rhs);
+    }
+}
+
+/**
+ * LRA ソルバ内で lhs >= rhs を表すためのデータ構造
+ */
+class LEInequality(T) : Inequality!T {
+    this(L lhs, L rhs, Expression originalExpr) {
+        super(lhs, rhs, originalExpr);
+    }
+
+    override string toString() {
+        import std.string : format;
+        return format("%s >= %s", this.lhs, this.rhs);
+    }
+}
+
+/**
+ * LRA ソルバ内で lhs <= rhs を表すためのデータ構造
+ */
+class GEInequality(T) : Inequality!T {
+    this(L lhs, L rhs, Expression originalExpr) {
+        super(lhs, rhs, originalExpr);
+    }
+
+    override string toString() {
+        import std.string : format;
+        return format("%s <= %s", this.lhs, this.rhs);
+    }
+}
+
+/**
  * 実数の線形算術に関する理論のソルバ
  */
 class QF_LRA_Solver : TheorySolver
@@ -348,6 +430,117 @@ unittest {
     ]);
 
     assert(toLRAPolynomial!BigInt(div2) == expected2);
+}
+
+/**
+ * 不等式を表す Expression を Inequality を継承したクラスのインスタンスに変換します。
+ */
+static Inequality!T toInequality(T)(Expression expr) {
+    if (auto gtExpr = cast(GreaterThanExpression) expr) {
+        auto lhs = toLRAPolynomial!T(gtExpr.lhs);
+        auto rhs = toLRAPolynomial!T(gtExpr.rhs);
+
+        return new GTInequality!T(lhs, rhs, expr);
+    }
+    if (auto ltExpr = cast(LessThanExpression) expr) {
+        auto lhs = toLRAPolynomial!T(ltExpr.lhs);
+        auto rhs = toLRAPolynomial!T(ltExpr.rhs);
+
+        return new LTInequality!T(lhs, rhs, expr);
+    }
+    if (auto geExpr = cast(GreaterThanOrEqualExpression) expr) {
+        auto lhs = toLRAPolynomial!T(geExpr.lhs);
+        auto rhs = toLRAPolynomial!T(geExpr.rhs);
+
+        return new GEInequality!T(lhs, rhs, expr);
+    }
+    if (auto leExpr = cast(LessThanOrEqualExpression) expr) {
+        auto lhs = toLRAPolynomial!T(leExpr.lhs);
+        auto rhs = toLRAPolynomial!T(leExpr.rhs);
+
+        return new LEInequality!T(lhs, rhs, expr);
+    }
+
+    import std.string : format;
+    throw new Exception("This expression is not representing inequality: %s".format(expr));
+}
+
+@("toInequality")
+unittest {
+    import std.bigint : BigInt;
+    import std.exception : assertThrown;
+
+    alias R = Rational!BigInt;
+    alias L = LRAPolynomial!BigInt;
+
+    const string CONSTANT_TERM_NAME = L.CONSTANT_TERM_NAME;
+
+    auto as = new SymbolExpression("a");
+    auto bs = new SymbolExpression("b");
+
+    auto a3 = new MultiplicationExpression(new IntegerExpression(3), as);
+    auto b2 = new MultiplicationExpression(new IntegerExpression(2), bs);
+
+    // 3a < 2b
+    {
+        auto le = new LessThanExpression(a3, b2);
+        auto expected = new LTInequality!BigInt(
+            new L([
+                "a": new R(3),
+            ]),
+            new L([
+                "b": new R(2),
+            ]),
+            le
+        );
+        assert(toInequality!BigInt(le) == expected);
+    }
+    // 3a > 2b
+    {
+        auto gt = new GreaterThanExpression(a3, b2);
+        auto expected = new GTInequality!BigInt(
+            new L([
+                "a": new R(3),
+            ]),
+            new L([
+                "b": new R(2),
+            ]),
+            gt
+        );
+        assert(toInequality!BigInt(gt) == expected);
+    }
+    // 3a <= 2b
+    {
+        auto le = new LessThanOrEqualExpression(a3, b2);
+        auto expected = new LEInequality!BigInt(
+            new L([
+                "a": new R(3),
+            ]),
+            new L([
+                "b": new R(2),
+            ]),
+            le
+        );
+        assert(toInequality!BigInt(le) == expected);
+    }
+    // 3a >= 2b
+    {
+        auto ge = new GreaterThanOrEqualExpression(a3, b2);
+        auto expected = new GEInequality!BigInt(
+            new L([
+                "a": new R(3),
+            ]),
+            new L([
+                "b": new R(2),
+            ]),
+            ge
+        );
+        assert(toInequality!BigInt(ge) == expected);
+    }
+
+    // Wrong argument
+    import std.exception : assertThrown;
+    assertThrown(toInequality!BigInt(new EqualExpression(as, bs)));
 }
 
 /**
