@@ -84,8 +84,6 @@ else
 			auto expr = solver.parseTree(sExpr);
 			solver.runExpression(expr);
 		}
-
-		solver.getStatusString().writeln;
 		return 0;
 	}
 

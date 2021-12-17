@@ -243,7 +243,10 @@ class SMTSolver
                 Expression content = fexpr.arguments[1];
                 return setInfo(name, content);
             case "check-sat":
-                return checkSat();
+                checkSat();
+                import std.stdio : writeln;
+                this.getStatusString().writeln;
+                break;
             case "exit":
                 exitSolver();
                 assert(0);
