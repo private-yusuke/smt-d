@@ -137,6 +137,23 @@ class FunctionExpression : Expression
 	}
 }
 
+@("FunctionExpression toString")
+unittest {
+	auto sortA = new Sort("A", 0);
+
+	auto varA = new SymbolExpression("a");
+	auto varB = new SymbolExpression("b");
+	auto funcF = new Function("f", [sortA, sortA], sortA);
+	auto a = new FunctionExpression(funcF, [varA, varB]);
+
+	import std.stdio;
+	a.toString.writeln;
+	assert(a.toString == "f(a b)");
+
+	auto b = new FunctionExpression(funcF, [a, varB]);
+	assert(b.toString == "f(f(a b) b)");
+}
+
 @("FunctionExpression obtains hash values that only depends on the content")
 unittest
 {
