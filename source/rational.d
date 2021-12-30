@@ -52,7 +52,7 @@ class Rational(T) if (isIntegral!T || is(T : BigInt))
         this(numerator.to!T, denominator.to!T);
     }
 
-    auto opBinary(string op, R)(const R rhs) const
+    auto opBinary(string op, R)(R rhs)
     {
         static if (op == "+")
             return add(rhs);

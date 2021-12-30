@@ -207,6 +207,9 @@ class QF_LRA_Solver : TheorySolver
     alias L = LRAPolynomial!BigInt;
     alias R = Rational!BigInt;
 
+    /// SimplexSolver が扱う制約
+    Inequality!BigInt[] constraints;
+
     /// 置いた項からスラック変数へのマッピング
     private string[L] termToSlackVar;
 
@@ -238,7 +241,7 @@ class QF_LRA_Solver : TheorySolver
         // 実数の線形算術に関する制約を抽出したものを保持
         // Bool 型の返り値を持つ関数など、LRA に関係ない制約はここでは扱わない
         // SAT ソルバに成り立たないとされた制約については、LRA の世界で同値となるような制約に書き換え、それが成り立つものとして扱う
-        Inequality!BigInt[] constraints = trueConstraints.filter!doesExpressionMatterToLRA.map!(expr => toInequality!BigInt(expr)).array ~ falseConstraints.filter!doesExpressionMatterToLRA.map!(expr => toInequality!BigInt(negateLRAExpression(expr), expr)).array;
+        constraints = trueConstraints.filter!doesExpressionMatterToLRA.map!(expr => toInequality!BigInt(expr)).array ~ falseConstraints.filter!doesExpressionMatterToLRA.map!(expr => toInequality!BigInt(negateLRAExpression(expr), expr)).array;
         
         // それぞれの不等号の変数を左辺に、定数を右辺に移項する
         constraints.each!(constraint => constraint.gatherVariablesToLhs());
@@ -260,7 +263,26 @@ class QF_LRA_Solver : TheorySolver
     {
         import std.string : format;
 
-        assert(0, "You must implement `solve()` for this theory solver: %s".format(typeid(this)));
+        SimplexSolver!BigInt ss = new SimplexSolver!BigInt(this.termToSlackVar);
+
+        foreach (constraint; constraints) {
+            if (auto le = cast(LEInequality!BigInt) constraint) {
+                ss.assertLower(le.lhs.getOnlyOneVariable(), le.rhs.getConstant());
+            }
+            else if (auto ge = cast(GEInequality!BigInt) constraint) {
+                ss.assertUpper(ge.lhs.getOnlyOneVariable(), ge.rhs.getConstant());
+            }
+            else throw new Exception("Constaint other than LE or GE is not supported yet: %s (%s)".format(constraint, typeid(constraint)));
+        }
+        import std.stdio;
+
+        Expression[] reasons = ss.check();
+        reasons.writeln;
+        ss.writeln;
+        ss.tableau.writeln;
+
+        import std.range : empty;
+        return TheorySolverResult(reasons.empty, []);
     }
 
     /**
@@ -734,7 +756,7 @@ class SimplexSolver(T)
     alias RWI = RationalWithInfinity!T;
 
     /// TODO: Specify appropriate type
-    alias Variable = int;
+    alias Variable = string;
     /**
      * スラック変数として導入されたものを含む、問題に現れるすべての変数（n 個）と、
      * スラック変数として導入された m 個の変数について、
@@ -747,7 +769,7 @@ class SimplexSolver(T)
      * Φ' は、与えられた問題 Φ の各項について、対応するスラック変数があれば、それで置き換えたものである。
      * tableau は A を表している訳ではない（A は fixed）が、tableau の初期値を定めるのに利用される。
      */
-    R[Variable][Variable] tableau;
+    LRAPolynomial!T[Variable] tableau;
 
     /// 各変数の現在の値
     R[Variable] variableValue;
@@ -760,60 +782,232 @@ class SimplexSolver(T)
     RedBlackTree!Variable basicVariables;
     RedBlackTree!Variable nonbasicVariables;
 
-    this()
+    this(Variable[LRAPolynomial!T] termToSlackVar)
     {
         this.basicVariables = redBlackTree!Variable;
         this.nonbasicVariables = redBlackTree!Variable;
+
+        foreach (p; termToSlackVar.byKeyValue) {
+            auto polynomial = p.key;
+            auto slackVar = p.value;
+
+            this.tableau[slackVar] = polynomial;
+            this.basicVariables.insert(slackVar);
+
+            this.nonbasicVariables.insert(polynomial.getVariables());
+
+            this.variableValue[slackVar] = new R(0);
+            polynomial.getVariables().each!(v => this.variableValue[v] = new R(0));
+        }
+    }
+
+    private RWI getUpperBound(Variable i) {
+        auto ptr = i in upperBound;
+        if (ptr) {
+            return *ptr;
+        } else {
+            return upperBound[i] = RWI.positiveInfinity;
+        }
+    }
+
+    private RWI getLowerBound(Variable i) {
+        auto ptr = i in lowerBound;
+        if (ptr) {
+            return *ptr;
+        } else {
+            return lowerBound[i] = RWI.negativeInfinity;
+        }
+    }
+
+    void update(Variable i, R v) {
+        writefln("update: %s to %s", i, v);
+
+        foreach (j; basicVariables) {
+            writefln("update::basicVariables: %s(%s) to %s", j, variableValue[j], variableValue[j] + tableau[j].getCoefficient(i) * (v - variableValue[i]));
+            variableValue[j] = variableValue[j] + tableau[j].getCoefficient(i) * (v - variableValue[i]);
+        }
+        variableValue[i] = v;
+    }
+
+    /**
+     * SimplexSolver が consistent な状態にない場合はその理由を返します。
+     */
+    Expression[] check() {
+        import std.range : front;
+        import std.algorithm : sort;
+        Sort realSort = new Sort("Real", 0);
+
+        while (true) {
+            auto invalidBasicVariablesWithValue = variableValue
+                .byKeyValue
+                .filter!(p => p.key in basicVariables)
+                .filter!(p => getLowerBound(p.key).isMoreThan(p.value) || getUpperBound(p.key).isLessThan(p.value))
+                .array
+                .sort!((a, b) => a.value < b.value);
+            if (invalidBasicVariablesWithValue.empty) return [];
+
+            auto invalidBasicVariable = invalidBasicVariablesWithValue.front;
+
+            if (getLowerBound(invalidBasicVariable.key).isMoreThan(invalidBasicVariable.value)) {
+                auto nonbasicVariables = variableValue
+                    .byKeyValue
+                    .filter!(p => p.key in nonbasicVariables)
+                    .filter!(p => (tableau[invalidBasicVariable.key].getCoefficient(p.key) > new R(0) && getUpperBound(p.key).isMoreThan(p.value))
+                        || (tableau[invalidBasicVariable.key].getCoefficient(p.key) < new R(0) && getLowerBound(p.key).isLessThan(p.value)))
+                    .array
+                    .sort!((a, b) => a.value < b.value);
+
+                // UNSAT
+                if (nonbasicVariables.empty) {
+                    auto nonbasicPlus = nonbasicVariables.filter!(v => tableau[invalidBasicVariable.key].getCoefficient(v.key) > new R(0));
+                    auto nonbasicMinus = nonbasicVariables.filter!(v => tableau[invalidBasicVariable.key].getCoefficient(v.key) < new R(0));
+                    Function invalidBasicVariableFunction = new Function(invalidBasicVariable.key, [], realSort);
+
+                    Expression[] reasons;
+                    reasons ~= nonbasicPlus.map!((n) {
+                        Function f = new Function(n.key, [], realSort);
+                        FunctionExpression fe = new FunctionExpression(f);
+                        LessThanOrEqualExpression ltExpr = new LessThanOrEqualExpression(fe, new RationalExpression!BigInt(getUpperBound(n.key).getValue()));
+                        return ltExpr;
+                    }).array;
+                    reasons ~= nonbasicMinus.map!((n) {
+                        Function f = new Function(n.key, [], realSort);
+                        FunctionExpression fe = new FunctionExpression(f);
+                        GreaterThanOrEqualExpression gtExpr = new GreaterThanOrEqualExpression(fe, new RationalExpression!BigInt(getLowerBound(n.key).getValue()));
+                        return gtExpr;
+                    }).array;
+                    reasons ~= new GreaterThanOrEqualExpression(new FunctionExpression(invalidBasicVariableFunction), new RationalExpression!BigInt(getLowerBound(invalidBasicVariable.key).getValue()));
+
+                    return reasons;
+                }
+                auto nonbasicVariable = nonbasicVariables.front;
+                pivotAndUpdate(invalidBasicVariable.key, nonbasicVariable.key, getLowerBound(invalidBasicVariable.key).getValue());
+            }
+
+            if (getUpperBound(invalidBasicVariable.key).isLessThan(invalidBasicVariable.value)) {
+                auto nonbasicVariables = variableValue
+                    .byKeyValue
+                    .filter!(p => p.key in nonbasicVariables)
+                    .filter!(p => (tableau[invalidBasicVariable.key].getCoefficient(p.key) < new R(0) && getUpperBound(p.key).isMoreThan(p.value))
+                        || (tableau[invalidBasicVariable.key].getCoefficient(p.key) > new R(0) && getLowerBound(p.key).isLessThan(p.value)))
+                    .array
+                    .sort!((a, b) => a.value < b.value);
+
+                // UNSAT
+                if (nonbasicVariables.empty) {
+                    auto nonbasicPlus = nonbasicVariables.filter!(v => tableau[invalidBasicVariable.key].getCoefficient(v.key) > new R(0));
+                    auto nonbasicMinus = nonbasicVariables.filter!(v => tableau[invalidBasicVariable.key].getCoefficient(v.key) < new R(0));
+                    Function invalidBasicVariableFunction = new Function(invalidBasicVariable.key, [], realSort);
+
+                    Expression[] reasons;
+                    reasons ~= nonbasicMinus.map!((n) {
+                        Function f = new Function(n.key, [], realSort);
+                        FunctionExpression fe = new FunctionExpression(f);
+                        LessThanOrEqualExpression ltExpr = new LessThanOrEqualExpression(fe, new RationalExpression!BigInt(getUpperBound(n.key).getValue()));
+                        return ltExpr;
+                    }).array;
+                    reasons ~= nonbasicPlus.map!((n) {
+                        Function f = new Function(n.key, [], realSort);
+                        FunctionExpression fe = new FunctionExpression(f);
+                        GreaterThanOrEqualExpression gtExpr = new GreaterThanOrEqualExpression(fe, new RationalExpression!BigInt(getLowerBound(n.key).getValue()));
+                        return gtExpr;
+                    }).array;
+                    reasons ~= new LessThanOrEqualExpression(new FunctionExpression(invalidBasicVariableFunction), new RationalExpression!BigInt(getUpperBound(invalidBasicVariable.key).getValue()));
+
+                    return reasons;
+                }
+                auto nonbasicVariable = nonbasicVariables.front;
+                pivotAndUpdate(invalidBasicVariable.key, nonbasicVariable.key, getLowerBound(invalidBasicVariable.key).getValue());
+            }
+        }
     }
 
     void pivot(Variable basic, Variable nonbasic)
     {
-        assert(tableau[basic][nonbasic] != R(0));
+        writefln("pivot: %s, %s", basic, nonbasic);
+        assert(tableau[basic].getCoefficient(nonbasic) != new R(0));
 
         this.basicVariables.removeKey(basic);
         this.nonbasicVariables.removeKey(nonbasic);
 
         this.basicVariables.insert(nonbasic);
         this.nonbasicVariables.insert(basic);
-
     }
 
     void pivotAndUpdate(Variable i, Variable j, R v)
     {
-        R theta = (v - variableValue[i]) / tableau[i][j];
+        writefln("pivotAndUpdate: %s, %s to %s", i, j, v);
+        R theta = (v - variableValue[i]) / tableau[i].getCoefficient(j);
         variableValue[i] = v;
         variableValue[j] = variableValue[j] + theta;
-        foreach (k; basicVariables.filter!(v => v != i))
+        foreach (k; basicVariables.array.filter!(v => v != i))
         {
-            variableValue[k] = variableValue[k] + tableau[basicToTableauIndex[k]][j] * theta;
+            writefln("pivotAndUpdate::basicVariables: %s(%s) to %s", k, variableValue[k], variableValue[k] + tableau[k].getCoefficient(j) * theta);
+            variableValue[k] = variableValue[k] + tableau[k].getCoefficient(j) * theta;
         }
+        pivot(i, j);
     }
 
-    bool assertUpper(variableValue i, R ci)
+    import std.stdio;
+    import std.string;
+
+    bool assertUpper(Variable i, R ci)
     {
-        if (upperBound[i].isLessThanOrEqual(ci))
+        if (getUpperBound(i).isLessThanOrEqual(ci)) {
+            writeln("assertUpper: %s <= %s".format(i, ci));
             return true;
-        if (lowerBound[i].isMoreThan(ci))
+        }
+        if (getLowerBound(i).isMoreThan(ci)) {
+            writeln("assertUpper: %s > %s".format(i, ci));
             return false;
+        }
         upperBound[i] = RWI(ci);
         if (i in this.nonbasicVariables && variableValue[i] > ci)
         {
-            // update(i, ci);
+            update(i, ci);
         }
         return true;
     }
 
-    bool assertLower(variableValue i, R ci)
+    bool assertLower(Variable i, R ci)
     {
-        if (lowerBound[i].isMoreThanOrEqual(ci))
+        if (getLowerBound(i).isMoreThanOrEqual(ci)) {
+            writeln("assertLower: %s >= %s".format(i, ci));
             return true;
-        if (upperBound[i].isLessThan(ci))
+        }
+        if (getUpperBound(i).isLessThan(ci)) {
+            writeln("assertLower: %s < %s".format(i, ci));
             return false;
+        }
         lowerBound[i] = RWI(ci);
         if (i in this.nonbasicVariables && variableValue[i] > ci)
         {
-            // update(i, ci);
+            update(i, ci);
         }
         return true;
+    }
+
+    R getSatisfyingAssignmentOfVariable(string varName) {
+        auto ub = getUpperBound(varName);
+        auto lb = getLowerBound(varName);
+        if (!ub.isInfinity()) {
+            return ub.getValue();
+        }
+        if (!lb.isInfinity()) {
+            return lb.getValue();
+        }
+
+        import std.string : format;
+        throw new Exception("Invalid upper bound and lower bound for %s: from %s to %s".format(varName, ub, lb));
+    }
+
+    override string toString() {
+        string res = "=== variables ===\n";
+        res ~= variableValue.keys.map!(v => format("%s: %s", v, v in basicVariables ? "basic" : v in nonbasicVariables ? "nonbasic" : "invalid")).join("\n");
+        res ~= "\n=== values ===\n";
+        res ~= variableValue.byKeyValue.map!(p => format("%s = %s", p.key, p.value)).join("\n");
+        res ~= "\n=== bounds ===\n";
+        res ~= variableValue.keys.map!(v => format("%s: %s to %s", v, getLowerBound(v), getUpperBound(v))).join("\n");
+        return res;
     }
 }

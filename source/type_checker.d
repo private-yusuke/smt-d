@@ -149,7 +149,9 @@ static class TypeChecker
         if (cast(AdditionExpression) expr ||
             cast(SubtractionExpression) expr ||
             cast(MultiplicationExpression) expr ||
-            cast(DivisionExpression) expr) {
+            cast(DivisionExpression) expr ||
+            cast(IntegerExpression) expr ||
+            cast(FloatExpression) expr) {
             return env.getSort("Real");
         }
 

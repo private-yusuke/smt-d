@@ -57,7 +57,9 @@ class LRAPolynomial(T)
      * 与えられた変数名 varName に対応する係数を返します。
      */
     R getCoefficient(string varName) {
-        return this.terms[varName];
+        auto ptr = varName in this.terms;
+        if (ptr) return *ptr;
+        else return new R(0);
     }
 
     /**
@@ -74,6 +76,37 @@ class LRAPolynomial(T)
         {
             setCoefficient(varName, this.terms[varName] + coefficient);
         }
+    }
+
+    /**
+     * 1 つの変数のみが含まれているときに、その変数を返します。
+     */
+    string getOnlyOneVariable() {
+        import std.range : front;
+
+        assert(terms.keys.length == 1);
+        assert(terms.values.front == new R(1));
+        return terms.keys.front;
+    }
+
+    /**
+     * 1 つの定数のみが含まれているときに、その変数を返します。
+     */
+    R getConstant() {
+        import std.range : front;
+
+        assert(containsOnlyConstant());
+        return terms.values.front;
+    }
+
+    /**
+     * 含まれている変数の名前の配列を返します。
+     */
+    string[] getVariables() {
+        import std.algorithm : filter;
+        import std.range : array;
+
+        return terms.keys.filter!(v => v != CONSTANT_TERM_NAME).array;
     }
 
     T plus(this T)(T rhs) {

@@ -101,6 +101,16 @@ struct RationalWithInfinity(T)
     {
         return this.isLessThan(r) || (!this.isInfinity() && this.getValue == r);
     }
+
+    string toString() {
+        if (isPositiveInfinity()) {
+            return "+oo";
+        }
+        if (isNegativeInfinity()) {
+            return "-oo";
+        }
+        return getValue().toString();
+    }
 }
 
 @("RationalWithInfinity initialization with value")
