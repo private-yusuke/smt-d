@@ -323,6 +323,9 @@ class SMTSolver
 	 */
     bool checkSat()
     {
+        if (!tSolver) {
+            throw new Exception("Theory solver is not initialized, perhaps the logic is not yet specified by the input.");
+        }
         // 現在の制約を充足するような assignment が存在したら真になる
         bool ok = false;
         while (!ok)
