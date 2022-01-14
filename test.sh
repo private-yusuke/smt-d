@@ -6,7 +6,7 @@ dub build
 
 for file in $benchmark_files; do
     echo "$file"
-    actual=$(./smt-d --file $file)
+    actual=$(./smt-d --file $file | tail -n 1)
     status=$?
     if [ $status -ne 0 ]; then
         echo "An error occured while running smt-d, return code $status"
