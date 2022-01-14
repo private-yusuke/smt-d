@@ -279,10 +279,10 @@ class QF_LRA_Solver : TheorySolver
         Expression[] reasons = ss.check();
         reasons.writeln;
         ss.writeln;
-        ss.tableau.writeln;
+        ss.tableau.byKeyValue.each!(p => writefln("%s: %s", p.key, p.value));
 
         import std.range : empty;
-        return TheorySolverResult(reasons.empty, []);
+        return TheorySolverResult(reasons.empty, reasons);
     }
 
     /**
@@ -386,6 +386,9 @@ static Rational!T toRational(T)(Expression expr) {
 		}
 		throw new Exception("Unable to convert float value %f to Rational".format(fExpr.value));
     }
+    if (auto rExpr = cast(RationalExpression!T) expr) {
+        return rExpr.value;
+    }
     throw new Exception("Unable to convert to Rational; unsupported type: %s".format(expr));
 }
 
@@ -434,6 +437,9 @@ static auto toLRAPolynomial(T)(Expression expr) {
     }
     if(auto fExpr = cast(FloatExpression) expr) {
         return new L([L.CONSTANT_TERM_NAME: toRational!T(fExpr)]);
+    }
+    if(auto rExpr = cast(RationalExpression!T) expr) {
+        return new L([L.CONSTANT_TERM_NAME: toRational!T(rExpr)]);
     }
     if(auto additionExpr = cast(AdditionExpression) expr) {
         auto lhs = toLRAPolynomial!T(additionExpr.lhs);
@@ -917,7 +923,7 @@ class SimplexSolver(T)
                     return reasons;
                 }
                 auto nonbasicVariable = nonbasicVariables.front;
-                pivotAndUpdate(invalidBasicVariable.key, nonbasicVariable.key, getLowerBound(invalidBasicVariable.key).getValue());
+                pivotAndUpdate(invalidBasicVariable.key, nonbasicVariable.key, getUpperBound(invalidBasicVariable.key).getValue());
             }
         }
     }
@@ -932,16 +938,42 @@ class SimplexSolver(T)
 
         this.basicVariables.insert(nonbasic);
         this.nonbasicVariables.insert(basic);
+
+        LRAPolynomial!T rest = new LRAPolynomial!T;
+        foreach (term; nonbasicVariables
+            .array
+            .filter!(v => v != nonbasic)
+            .map!(v => (new LRAPolynomial!T([v: tableau[basic].getCoefficient(v) / tableau[basic].getCoefficient(nonbasic)])))
+            .array
+        ) {
+            rest = rest.plus(term);
+        }
+
+        tableau[nonbasic] = (new LRAPolynomial!T([basic: variableValue[basic].reciprocal])).minus(rest);
+        tableau[basic] = null;
+
+        // 以前まで nonbasic variable だったところを tableau[nonbasic] の内容で置換する
+        foreach (b; basicVariables) {
+            LRAPolynomial!T poly = tableau[b];
+            if (poly.coefficientExists(basic)) {
+                R coefficient = poly.getCoefficient(basic);
+                LRAPolynomial!T alt = tableau[nonbasic].times(coefficient);
+                poly = poly.plus(alt);
+                tableau[basic] = poly;
+            }
+        }
     }
 
     void pivotAndUpdate(Variable i, Variable j, R v)
     {
+        tableau.byKeyValue.each!(p => writefln("%s: %s", p.key, p.value));
         writefln("pivotAndUpdate: %s, %s to %s", i, j, v);
         R theta = (v - variableValue[i]) / tableau[i].getCoefficient(j);
         variableValue[i] = v;
         variableValue[j] = variableValue[j] + theta;
         foreach (k; basicVariables.array.filter!(v => v != i))
         {
+            k.writeln;
             writefln("pivotAndUpdate::basicVariables: %s(%s) to %s", k, variableValue[k], variableValue[k] + tableau[k].getCoefficient(j) * theta);
             variableValue[k] = variableValue[k] + tableau[k].getCoefficient(j) * theta;
         }
@@ -1002,12 +1034,14 @@ class SimplexSolver(T)
     }
 
     override string toString() {
+        import std.algorithm : sort;
+
         string res = "=== variables ===\n";
-        res ~= variableValue.keys.map!(v => format("%s: %s", v, v in basicVariables ? "basic" : v in nonbasicVariables ? "nonbasic" : "invalid")).join("\n");
+        res ~= variableValue.keys.sort.map!(v => format("%s: %s", v, v in basicVariables ? "basic" : v in nonbasicVariables ? "nonbasic" : "invalid")).join("\n");
         res ~= "\n=== values ===\n";
         res ~= variableValue.byKeyValue.map!(p => format("%s = %s", p.key, p.value)).join("\n");
         res ~= "\n=== bounds ===\n";
-        res ~= variableValue.keys.map!(v => format("%s: %s to %s", v, getLowerBound(v), getUpperBound(v))).join("\n");
+        res ~= variableValue.keys.sort.map!(v => format("%s: %s to %s", v, getLowerBound(v), getUpperBound(v))).join("\n");
         return res;
     }
 }
