@@ -199,7 +199,7 @@ class LRAPolynomial(T)
 
         foreach (varName, coefficient; this.terms)
         {
-            newTerms[varName] = new R(coefficient * value);
+            newTerms[varName] = new R(new R(coefficient) * value);
         }
         return new T(newTerms);
     }
@@ -210,7 +210,7 @@ class LRAPolynomial(T)
 
         foreach (varName, coefficient; this.terms)
         {
-            newTerms[varName] = new R(coefficient / value);
+            newTerms[varName] = new R(new R(coefficient) / value);
         }
         return new T(newTerms);
     }
