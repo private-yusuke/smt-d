@@ -362,7 +362,11 @@ private class CongruenceClosure
 
         foreach (index, node; indexToNode)
         {
-            res ~= format(`"%s" [label=<%s, %s<BR /><FONT POINT-SIZE="10">%s</FONT>>];` ~ '\n', node.toHash(), node.label, root(node), node.expr);
+            res ~= format(`"%s" [ordering="out", label=<%s<BR /><FONT POINT-SIZE="10">%s</FONT>>];` ~ '\n', node.toHash(), node.label, node.expr);
+        }
+        foreach (index, node; indexToNode)
+        {
+            res ~= format(`"%s" -> "%s" [style="dashed"]`, node.toHash(), indexToNode[root(node)].toHash());
         }
         foreach (from, tos; successors)
         {
