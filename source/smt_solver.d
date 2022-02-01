@@ -163,6 +163,8 @@ class SMTSolver
                 return new GreaterThanOrEqualExpression(statements[1], statements[2]);
             case "let":
                 return expandLet(cast(ListExpression) statements[1], statements[2]);
+            case "distinct":
+                return expandDistinct(statements[1 .. $]);
             default:
                 break;
             }
@@ -434,7 +436,7 @@ class SMTSolver
     /**
 	 * let 式を展開します。
 	 */
-    Expression expandLet(ListExpression bindList, Expression expr)
+    static Expression expandLet(ListExpression bindList, Expression expr)
     {
         if (!bindList)
         {
@@ -456,7 +458,7 @@ class SMTSolver
     /**
 	 * let 式を展開します（実際に式の置換を行うメソッド）。
 	 */
-    private Expression _expandLet(BindExpression bind, Expression expr)
+    private static Expression _expandLet(BindExpression bind, Expression expr)
     {
         if (auto fExpr = cast(FunctionExpression) expr)
         {
@@ -502,6 +504,82 @@ class SMTSolver
         }
 
         throw new Exception("Unknown expression: %s".format(expr));
+    }
+
+    /**
+     * 引数が n 個ある distinct 関数の呼び出しを、n * (n-1) / 2 個の不等号の制約に変換します。
+     */
+    static AndExpression expandDistinct(Expression[] arguments) {
+        Expression[] andArguments;
+
+        foreach (i; 0..arguments.length) {
+            foreach (j; 0..arguments.length) {
+                if (i >= j) continue;
+                andArguments ~= new NotExpression(
+                    new EqualExpression(arguments[i], arguments[j])
+                );
+            }
+        }
+
+        return new AndExpression(andArguments);
+    }
+
+    @("expandDistinct with array of 3 elements")
+    unittest {
+        import std.algorithm : canFind;
+
+		auto sortA = new Sort("A", 0);
+
+		auto varA = new SymbolExpression("a");
+		auto varB = new SymbolExpression("b");
+		auto varC = new SymbolExpression("c");
+
+        AndExpression actual = expandDistinct([varA, varB, varC]);
+
+        assert(actual.arguments.canFind(
+            new NotExpression(new EqualExpression(varA, varB))
+        ));
+        assert(actual.arguments.canFind(
+            new NotExpression(new EqualExpression(varB, varC))
+        ));
+        assert(actual.arguments.canFind(
+            new NotExpression(new EqualExpression(varC, varA))
+        ));
+        assert(actual.arguments.length == 3);
+    }
+
+    @("expandDistinct with array of 4 elements")
+    unittest {
+        import std.algorithm : canFind;
+
+		auto sortA = new Sort("A", 0);
+
+		auto varA = new SymbolExpression("a");
+		auto varB = new SymbolExpression("b");
+		auto varC = new SymbolExpression("c");
+		auto varD = new SymbolExpression("d");
+
+        AndExpression actual = expandDistinct([varA, varB, varC, varD]);
+
+        assert(actual.arguments.canFind(
+            new NotExpression(new EqualExpression(varA, varB))
+        ));
+        assert(actual.arguments.canFind(
+            new NotExpression(new EqualExpression(varA, varC))
+        ));
+        assert(actual.arguments.canFind(
+            new NotExpression(new EqualExpression(varA, varD))
+        ));
+        assert(actual.arguments.canFind(
+            new NotExpression(new EqualExpression(varB, varC))
+        ));
+        assert(actual.arguments.canFind(
+            new NotExpression(new EqualExpression(varB, varD))
+        ));
+        assert(actual.arguments.canFind(
+            new NotExpression(new EqualExpression(varC, varD))
+        ));
+        assert(actual.arguments.length == 6);
     }
 
     /**

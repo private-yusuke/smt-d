@@ -1,0 +1,8 @@
+(set-logic QF_UF)
+(set-info :status unsat)
+(declare-sort U 0)
+(declare-fun a () U)
+(declare-fun b () U)
+(assert (distinct a b))
+(assert (= a b))
+(check-sat)
