@@ -337,7 +337,7 @@ private class CongruenceClosure
             return;
 
         unite(u, v);
-        foreach (p; zip(getPredecessors(u), getPredecessors(v)))
+        foreach (p; cartesianProduct(getPredecessors(u), getPredecessors(v)))
         {
             if (!same(p[0], p[1]) && congruent(p[0], p[1]))
             {
