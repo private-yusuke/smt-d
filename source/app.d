@@ -92,7 +92,19 @@ else
 	 */
 	auto parseInput(File f = stdin)
 	{
-		string content = f.byLineCopy(Yes.keepTerminator).join.array.to!string;
+		import std.algorithm : map;
+		import std.string : indexOf;
+		
+
+		string content = f.byLineCopy
+			.map!((s) {
+				auto i = s.indexOf(";");
+				if (i >= 0) {
+					return s[0..i];
+				}
+				else return s;
+			})
+			.join("\n").array.to!string;
 		return SExpression(content);
 	}
 }
