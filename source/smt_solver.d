@@ -35,8 +35,8 @@ SExpression:
 	String  < DoublequotedString / WysiwygString
 	DoublequotedString <~ :doublequote (!doublequote Char)* :doublequote
 	WysiwygString <~ :'|' (!'|' WysiwygChar)* :'|'
-	Symbol  <~ [a-zA-Z_$\-][a-zA-Z0-9_$\-]*
-	Keyword  <~ :':' !ReservedWord [a-zA-Z_\-][a-zA-Z0-9_\-]*
+	Symbol  <~ [a-zA-Z\~\!\@\$\%%\^\&\*\_\+\=\<\>\.\?\/\-][0-9a-zA-Z\~\!\@\$\%%\^\&\*\_\+\=\<\>\.\?\/\-]*
+	Keyword  <~ :':' !ReservedWord [0-9a-zA-Z\~\!\@\$\%%\^\&\*\_\+\=\<\>\.\?\/\-]+
 	List    <- '(' SExpr* ')'
 
 	ReservedWord <  %-(%s / %)
